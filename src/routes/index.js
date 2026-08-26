@@ -1,16 +1,17 @@
-import { Router } from 'express'
-const router = Router()
+import express from 'express';
+const router = express.Router();
 
 router.get('/', (req, res) => {
-  res.render('index', { title: 'My First App with Node.js' })
-})
+  res.render('index', { title: 'Inicio' });
+});
 
-router.get('/about', (req, res) => {
-  res.render('about', { title: 'About Us' })
-})
+router.get('/calendar', (req, res) => {
+  const now = new Date();
+  res.render('calendar', {
+    title: 'Calendario',
+    year: now.getFullYear(),
+    month: now.getMonth() + 1
+  });
+});
 
-router.get('/contact', (req, res) => {
-  res.render('contact', { title: 'Contact Us' })
-})
-
-export default router
+export default router;

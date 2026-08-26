@@ -1,19 +1,21 @@
 import express from 'express';
-import {dirname, join} from 'path'
-import { fileURLToPath } from 'url'
+import path from 'path';
+import { fileURLToPath } from 'url';
+import indexRoutes from './routes/index.js';
+import taskRoutes from './routes/tasks.js';
 
-import indexRoutes from './routes/index.js'
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-const app = express()
+const app = express();
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
 
-app.use(indexRoutes)
-app.set('views', join(__dirname, 'views'))
-app.set('view engine', 'ejs')
+app.use(indexRoutes);
+app.use(taskRoutes);
 
-app.use(express.static(join(__dirname, 'public')))
-
-app.listen(3000, () => {
-  console.log('Server is running on port 3000')
-});
+const PORT = 3000;
+app.listen(PORT, () => console.log(`Servidor corriendo en http://localhost:${PORT}`));
