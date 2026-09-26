@@ -1,7 +1,7 @@
 // Validación de entrada para objetivos. Misma forma que validation/tasks.js:
 // funciones puras que devuelven { data, fields }.
 import { parseDateOnly } from '../dates.js';
-import { optionalText, requiredText, intInRange } from './common.js';
+import { optionalText, requiredText, intInRange, hasErrors } from './common.js';
 import { TYPE_LABELS, DEFAULT_STRATEGY } from '../planning/templates.js';
 
 export const GOAL_TYPES = Object.keys(TYPE_LABELS);
@@ -63,4 +63,36 @@ export function validateGoalCreate(body = {}) {
   }
 
   return { data, fields };
+}
+
+export const WEEK_LIMITS = { label: 50, target: 14 };
+
+// Edición de una semana del plan. `target` solo se acepta en objetivos por
+// fases: en los por contenido la cuota se calcula sola.
+export function validateWeekUpdate(body = {}, strategy) {
+  const fields = {};
+  const data = {};
+
+  if (body.label !== undefined) {
+    const label = requiredText(body.label, WEEK_LIMITS.label, 'label', fields, 'La etiqueta es obligatoria');
+    if (label !== undefined) data.label = label;
+  }
+
+  if (body.target !== undefined) {
+    if (strategy !== 'fases') {
+      fields.target = 'En un objetivo por contenido la cuota se calcula sola';
+    } else {
+      const target = intInRange(body.target, 0, WEEK_LIMITS.target, 'target', fields);
+      if (target !== undefined) data.target = target;
+    }
+  }
+
+  let applyToPhase = false;
+  if (body.applyToPhase !== undefined) {
+    if (typeof body.applyToPhase === 'boolean') applyToPhase = body.applyToPhase;
+    else fields.applyToPhase = 'applyToPhase debe ser true o false';
+  }
+
+  const error = !hasErrors(fields) && Object.keys(data).length === 0 ? 'No hay campos para actualizar' : undefined;
+  return { data, fields, applyToPhase, error };
 }

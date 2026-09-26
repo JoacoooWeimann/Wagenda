@@ -190,6 +190,129 @@ describe('POST /api/goals/:id/sessions', () => {
   });
 });
 
+describe('editar tareas de un plan', () => {
+  const targets = async (goalId) =>
+    (await ctx.request('GET', `/api/goals/${goalId}`)).body.weeks.map(w => w.target);
+
+  it('mover un contenido de fecha lo pasa de semana y la cuota se ajusta sola', async () => {
+    const goal = await createGoal(algebra({ reviewWeek: false })); // [1,1,2,1,1]
+    const unit1 = goal.weeks[0].tasks.find(t => t.kind === 'tarea');
+
+    // de la semana 1 a la semana 2 (12/10 a 18/10)
+    const res = await ctx.request('PATCH', `/api/tasks/${unit1.id}`, { startDate: '2026-10-12', endDate: '2026-10-18' });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.goalWeek.number, 2);
+    assert.deepEqual(await targets(goal.id), [0, 2, 2, 1, 1]);
+  });
+
+  it('borrar un contenido baja la cuota de su semana', async () => {
+    const goal = await createGoal(algebra({ reviewWeek: false }));
+    const unit = goal.weeks[2].tasks.find(t => t.kind === 'tarea');
+    await ctx.request('DELETE', `/api/tasks/${unit.id}`);
+    assert.deepEqual(await targets(goal.id), [1, 1, 1, 1, 1]);
+  });
+
+  it('no se puede mover una tarea fuera del plazo del objetivo', async () => {
+    const goal = await createGoal(algebra());
+    const unit = goal.weeks[0].tasks[0];
+    const res = await ctx.request('PATCH', `/api/tasks/${unit.id}`, { startDate: '2026-12-01', endDate: '2026-12-01' });
+    assert.equal(res.status, 400);
+    assert.match(res.body.fields.startDate, /plazo/);
+  });
+
+  it('la fecha límite no se mueve, pero se puede renombrar (y reenviar sus mismas fechas)', async () => {
+    const goal = await createGoal(algebra());
+    const hito = goal.weeks.at(-1).tasks.find(t => t.kind === 'hito');
+
+    const moved = await ctx.request('PATCH', `/api/tasks/${hito.id}`, { startDate: '2026-11-01', endDate: '2026-11-01' });
+    assert.equal(moved.status, 400);
+
+    // El formulario del calendario manda siempre todas las fechas: si no cambian, es válido
+    const renamed = await ctx.request('PATCH', `/api/tasks/${hito.id}`, {
+      title: 'Final de Álgebra', startDate: '2026-11-08', endDate: '2026-11-08'
+    });
+    assert.equal(renamed.status, 200);
+    assert.equal(renamed.body.title, 'Final de Álgebra');
+  });
+
+  it('mover una sesión la pasa a la semana de su nueva fecha', async () => {
+    const goal = await createGoal(running());
+    const session = (await ctx.request('POST', `/api/goals/${goal.id}/sessions`, { date: '2026-10-06' })).body;
+    const res = await ctx.request('PATCH', `/api/tasks/${session.id}`, { startDate: '2026-10-20', endDate: '2026-10-20' });
+    assert.equal(res.body.goalWeek.number, 3);
+  });
+});
+
+describe('PATCH /api/goals/:id/weeks/:weekId', () => {
+  const patchWeek = (goalId, weekId, body) => ctx.request('PATCH', `/api/goals/${goalId}/weeks/${weekId}`, body);
+
+  it('cambia etiqueta y cuota de una semana y devuelve el objetivo actualizado', async () => {
+    const goal = await createGoal(running());
+    const res = await patchWeek(goal.id, goal.weeks[4].id, { label: 'Descanso', target: 0 });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.weeks[4].label, 'Descanso');
+    assert.equal(res.body.weeks[4].target, 0);
+    assert.equal(res.body.weeks[5].label, 'Intensidad');
+    assert.equal(res.body.progress.total, 24 - 3);
+  });
+
+  it('con applyToPhase cambia todas las semanas de la fase', async () => {
+    const goal = await createGoal(running()); // Consistencia: semanas 2-4
+    const res = await patchWeek(goal.id, goal.weeks[1].id, { label: 'Base aeróbica', target: 4, applyToPhase: true });
+    assert.deepEqual(res.body.weeks.map(w => w.label), [
+      'Diagnóstico', 'Base aeróbica', 'Base aeróbica', 'Base aeróbica',
+      'Intensidad', 'Intensidad', 'Intensidad', 'Evaluación'
+    ]);
+    assert.deepEqual(res.body.weeks.map(w => w.target), [3, 4, 4, 4, 3, 3, 3, 3]);
+  });
+
+  it('cambiar la etiqueta de una semana cambia la duración de las fases', async () => {
+    const goal = await createGoal(running());
+    const res = await patchWeek(goal.id, goal.weeks[4].id, { label: 'Consistencia' }); // la 5 pasa a Consistencia
+    assert.equal(res.body.weeks.filter(w => w.label === 'Consistencia').length, 4);
+  });
+
+  it('en un objetivo por contenido la cuota no se edita (se calcula sola)', async () => {
+    const goal = await createGoal(algebra());
+    const res = await patchWeek(goal.id, goal.weeks[0].id, { target: 5 });
+    assert.equal(res.status, 400);
+    assert.ok(res.body.fields.target);
+    assert.equal((await patchWeek(goal.id, goal.weeks[0].id, { label: 'Intro' })).status, 200);
+  });
+
+  it('valida datos y pertenencia', async () => {
+    const goal = await createGoal(running());
+    const other = await createGoal(algebra());
+    assert.equal((await patchWeek(goal.id, goal.weeks[0].id, {})).status, 400);
+    assert.ok((await patchWeek(goal.id, goal.weeks[0].id, { target: 15 })).body.fields.target);
+    assert.ok((await patchWeek(goal.id, goal.weeks[0].id, { label: ' ' })).body.fields.label);
+    assert.equal((await patchWeek(goal.id, other.weeks[0].id, { label: 'x' })).status, 404); // semana de otro objetivo
+    assert.equal((await patchWeek(9999, goal.weeks[0].id, { label: 'x' })).status, 404);
+  });
+});
+
+describe('POST /api/goals/:id/weeks/:weekId/tasks', () => {
+  it('agrega un contenido que ocupa la semana y sube su cuota', async () => {
+    const goal = await createGoal(algebra({ reviewWeek: false }));
+    const week = goal.weeks[1];
+    const res = await ctx.request('POST', `/api/goals/${goal.id}/weeks/${week.id}/tasks`, { title: 'TP 1' });
+    assert.equal(res.status, 201);
+    assert.equal(res.body.startDate, week.startDate);
+    assert.equal(res.body.endDate, week.endDate);
+    assert.equal(res.body.goalWeek.number, 2);
+
+    const { body } = await ctx.request('GET', `/api/goals/${goal.id}`);
+    assert.equal(body.weeks[1].target, 2);
+  });
+
+  it('solo en objetivos por contenido, y con título', async () => {
+    const fases = await createGoal(running());
+    assert.equal((await ctx.request('POST', `/api/goals/${fases.id}/weeks/${fases.weeks[0].id}/tasks`, { title: 'x' })).status, 400);
+    const divisible = await createGoal(algebra());
+    assert.ok((await ctx.request('POST', `/api/goals/${divisible.id}/weeks/${divisible.weeks[0].id}/tasks`, {})).body.fields.title);
+  });
+});
+
 describe('DELETE /api/goals/:id', () => {
   it('borra el objetivo, sus semanas y sus tareas (cascade), sin tocar tareas sueltas', async () => {
     const goal = await createGoal(algebra());

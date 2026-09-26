@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateGoalCreate } from '../../src/utiles/validation/goals.js';
+import { validateGoalCreate, validateWeekUpdate } from '../../src/utiles/validation/goals.js';
 
 const divisible = (extra = {}) => ({
   title: 'Álgebra', type: 'academico', strategy: 'divisible',
@@ -69,5 +69,27 @@ describe('validateGoalCreate', () => {
     assert.equal(validateGoalCreate(divisible({ unitName: '  ' })).data.unitName, 'Unidad');
     assert.equal(validateGoalCreate(divisible({ unitName: ' Capítulo ' })).data.unitName, 'Capítulo');
     assert.ok(validateGoalCreate(divisible({ reviewWeek: 'no' })).fields.reviewWeek);
+  });
+});
+
+describe('validateWeekUpdate', () => {
+  it('etiqueta y cuota en fases; applyToPhase opcional', () => {
+    const r = validateWeekUpdate({ label: ' Base ', target: 0, applyToPhase: true }, 'fases');
+    assert.deepEqual(r.fields, {});
+    assert.deepEqual(r.data, { label: 'Base', target: 0 });
+    assert.equal(r.applyToPhase, true);
+  });
+
+  it('la cuota no se acepta en divisible', () => {
+    assert.ok(validateWeekUpdate({ target: 2 }, 'divisible').fields.target);
+  });
+
+  it('rechaza cuotas fuera de 0-14, etiquetas vacías y cuerpo vacío', () => {
+    assert.ok(validateWeekUpdate({ target: -1 }, 'fases').fields.target);
+    assert.ok(validateWeekUpdate({ target: 15 }, 'fases').fields.target);
+    assert.ok(validateWeekUpdate({ label: '' }, 'fases').fields.label);
+    assert.ok(validateWeekUpdate({ label: 'x'.repeat(51) }, 'fases').fields.label);
+    assert.ok(validateWeekUpdate({}, 'fases').error);
+    assert.ok(validateWeekUpdate({ applyToPhase: 'si', label: 'x' }, 'fases').fields.applyToPhase);
   });
 });

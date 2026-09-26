@@ -1,5 +1,7 @@
 import express from 'express';
-import { previewGoal, createGoal, listGoals, getGoal, deleteGoal, logSession } from '../controllers/goals.js';
+import {
+  previewGoal, createGoal, listGoals, getGoal, deleteGoal, logSession, updateWeek, addWeekTask
+} from '../controllers/goals.js';
 
 const router = express.Router();
 
@@ -9,5 +11,7 @@ router.post('/api/goals', createGoal);
 router.get('/api/goals/:id', getGoal);
 router.delete('/api/goals/:id', deleteGoal);
 router.post('/api/goals/:id/sessions', logSession);
+router.patch('/api/goals/:id/weeks/:weekId', updateWeek);
+router.post('/api/goals/:id/weeks/:weekId/tasks', addWeekTask);
 
 export default router;

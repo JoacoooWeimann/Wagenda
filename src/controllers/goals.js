@@ -1,7 +1,8 @@
 import prisma from '../utiles/db.js';
 import { invalid, notFound } from '../utiles/responses.js';
 import { hasErrors, parseId } from '../utiles/validation/common.js';
-import { validateGoalCreate } from '../utiles/validation/goals.js';
+import { validateGoalCreate, validateWeekUpdate } from '../utiles/validation/goals.js';
+import { requiredText } from '../utiles/validation/common.js';
 import { currentUserId } from '../utiles/currentUser.js';
 import { generatePlan, PlanError } from '../utiles/planning/index.js';
 import { TYPE_LABELS } from '../utiles/planning/templates.js';
@@ -32,9 +33,16 @@ const doneInWeek = (week) => week.tasks.filter(t => t.done && t.kind !== 'hito')
 //   Σ min(hecho, cuota) / Σ cuota
 // El min es por semana: el exceso de una semana no compensa la falta de otra,
 // porque el plan apunta a la constancia (el exceso queda como "cuota superada").
+//
+// La cuota (target) depende de la estrategia:
+//   - fases: se guarda en la semana; es lo que el usuario decide (editable)
+//   - divisible: se calcula como la cantidad de contenidos planificados en la
+//     semana. Así, mover, agregar o borrar un contenido la ajusta sola, sin
+//     tener que actualizar dos semanas cada vez (un dato derivado no se desincroniza).
 function withProgress(goal, { keepTasks }) {
   const weeks = goal.weeks.map(({ tasks, ...week }) => ({
     ...week,
+    target: goal.strategy === 'divisible' ? tasks.filter(t => t.kind !== 'hito').length : week.target,
     done: doneInWeek({ tasks }),
     ...(keepTasks ? { tasks } : {})
   }));
@@ -163,4 +171,74 @@ export async function logSession(req, res) {
     include: TASK_WITH_GOAL
   });
   res.status(201).json(session);
+}
+
+// Busca objetivo + semana del usuario a partir de la URL. Devuelve { goal, week }
+// o la respuesta de error ya enviada (null).
+async function findGoalWeek(req, res) {
+  const id = parseId(req.params.id);
+  const weekId = parseId(req.params.weekId);
+  if (!id || !weekId) {
+    invalid(res, { id: 'id inválido' });
+    return null;
+  }
+  const goal = await prisma.goal.findFirst({ where: { id, userId: currentUserId(req) } });
+  const week = goal && await prisma.goalWeek.findFirst({ where: { id: weekId, goalId: goal.id } });
+  if (!week) {
+    notFound(res, goal ? 'Semana no encontrada' : GOAL_NOT_FOUND);
+    return null;
+  }
+  return { goal, week };
+}
+
+// Edita etiqueta y/o cuota de una semana. Con applyToPhase, el cambio se aplica a
+// todas las semanas del objetivo con la misma etiqueta: una "fase" es justamente
+// el conjunto de semanas con la misma etiqueta, así que renombrarla o cambiarle
+// la cuota es un updateMany por etiqueta.
+export async function updateWeek(req, res) {
+  const found = await findGoalWeek(req, res);
+  if (!found) return;
+  const { goal, week } = found;
+
+  const { data, fields, applyToPhase, error } = validateWeekUpdate(req.body, goal.strategy);
+  if (hasErrors(fields)) return invalid(res, fields);
+  if (error) return res.status(400).json({ error });
+
+  if (applyToPhase) {
+    await prisma.goalWeek.updateMany({ where: { goalId: goal.id, label: week.label }, data });
+  } else {
+    await prisma.goalWeek.update({ where: { id: week.id }, data });
+  }
+
+  // Devuelve el objetivo completo: la UI refresca el plan y el progreso de una vez
+  const updated = await prisma.goal.findUnique({ where: { id: goal.id }, include: WEEKS_WITH_TASKS });
+  res.json(withProgress(updated, { keepTasks: true }));
+}
+
+// Agrega un contenido a una semana de un objetivo por contenido. Ocupa toda la
+// semana, como los generados; la cuota de la semana sube sola (es derivada).
+export async function addWeekTask(req, res) {
+  const found = await findGoalWeek(req, res);
+  if (!found) return;
+  const { goal, week } = found;
+
+  if (goal.strategy !== 'divisible') {
+    return invalid(res, { strategy: 'Solo los objetivos por contenido agregan contenidos' });
+  }
+  const fields = {};
+  const title = requiredText(req.body?.title, 100, 'title', fields, 'El título es obligatorio');
+  if (hasErrors(fields)) return invalid(res, fields);
+
+  const task = await prisma.task.create({
+    data: {
+      title,
+      startDate: week.startDate,
+      endDate: week.endDate,
+      category: TYPE_LABELS[goal.type],
+      userId: goal.userId,
+      goalWeekId: week.id
+    },
+    include: TASK_WITH_GOAL
+  });
+  res.status(201).json(task);
 }
