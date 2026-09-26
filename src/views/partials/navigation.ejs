@@ -1,15 +1,20 @@
-<nav class="navbar navbar-expand-lg bg-body-tertiary dark" data-bs-theme="dark">
+<%
+  const links = [
+    { href: '/', label: 'Inicio' },
+    { href: '/calendar', label: 'Calendario' }
+  ];
+%>
+<nav class="navbar navbar-expand-lg bg-body-tertiary" data-bs-theme="dark">
   <div class="container-fluid">
-    <a class="navbar-brand" href="#">Node JS </a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
+    <a class="navbar-brand" href="/">Wagenda</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarLinks" aria-controls="navbarLinks" aria-expanded="false" aria-label="Abrir menú">
       <span class="navbar-toggler-icon"></span>
     </button>
-    <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
+    <div class="collapse navbar-collapse" id="navbarLinks">
       <div class="navbar-nav">
-        <a class="nav-link active" aria-current="page" href="/">Home</a>
-        <a class="nav-link" href="/calendar">Calendario</a>
-        <a class="nav-link" href="/contact">Contact</a>
-        <a class="nav-link disabled" aria-disabled="true">Disabled</a>
+        <% links.forEach(link => { const active = currentPath === link.href; %>
+          <a class="nav-link<%= active ? ' active' : '' %>" href="<%= link.href %>"<%- active ? ' aria-current="page"' : '' %>><%= link.label %></a>
+        <% }) %>
       </div>
     </div>
   </div>

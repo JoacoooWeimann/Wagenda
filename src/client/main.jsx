@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client';
-import Calendar from './components/Calendar.jsx'; // 👈 mismo nivel, no './components' desde afuera
+import Calendar from './components/Calendar.jsx';
 
 const container = document.getElementById('calendar-root');
 if (container) {
