@@ -169,12 +169,15 @@
   display: inline-block;
 }
 .calendar-modal {
-  overflow: hidden; /* evita que el contenido "se escape" visualmente del borde redondeado */
+  /* Alto máximo + scroll: con el formulario completo el modal no entra en pantallas bajas.
+     overflow-y: auto también recorta el contenido al borde redondeado. */
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .calendar-task-form {
   display: flex;
-  flex-direction: column;  /* 👈 el cambio clave: columna, no fila */
+  flex-direction: column;
   gap: 10px;
   margin-bottom: 16px;
 }
@@ -268,4 +271,74 @@
 .calendar-task-form button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Paso 6: UX */
+.calendar-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.calendar-nav:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.calendar-task-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.calendar-task-range {
+  color: #888;
+  font-size: 0.8rem;
+}
+
+.calendar-task-description {
+  color: #999;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calendar-task-confirm {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.calendar-task-list .calendar-task-confirm button {
+  margin-left: 0;
+  font-size: 0.8rem;
+  color: #555;
+}
+
+.calendar-task-list .calendar-task-confirm .calendar-task-confirm-delete {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.calendar-form-title {
+  margin: 8px 0 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-task-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
 }

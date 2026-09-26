@@ -3,7 +3,9 @@ import { buildCalendar, toDateKey, MESES, DIAS_SEMANA } from '../utiles/calendar
 import { getTasks, createTask, updateTask, deleteTask } from '../utiles/api.js';
 
 const PRIORIDADES = ['baja', 'normal', 'alta'];
+const ETIQUETA_PRIORIDAD = { baja: 'Baja', normal: 'Normal', alta: 'Alta' };
 const COLOR_PRIORIDAD = { alta: '#ef4444', normal: '#2563eb', baja: '#9ca3af' };
+const ORDEN_PRIORIDAD = { alta: 0, normal: 1, baja: 2 };
 
 // Las fechas llegan como medianoche UTC ("2026-09-09T00:00:00.000Z"): nos quedamos
 // con la parte "YYYY-MM-DD" y comparamos strings. Con ceros a la izquierda, el orden
@@ -20,6 +22,21 @@ function highestPriority(tasks) {
   return null;
 }
 
+// Pendientes primero y, dentro de cada grupo, de mayor a menor prioridad.
+// sort es estable: los empates conservan el orden por startDate que manda el servidor.
+function sortForDay(tasks) {
+  return [...tasks].sort((a, b) =>
+    (a.done - b.done) || (ORDEN_PRIORIDAD[a.priority] - ORDEN_PRIORIDAD[b.priority])
+  );
+}
+
+const isMultiDay = (task) => task.startDate.slice(0, 10) !== task.endDate.slice(0, 10);
+
+// "2026-09-09T00:00:00.000Z" -> "9/9"
+function shortDate(iso) {
+  return `${Number(iso.slice(8, 10))}/${Number(iso.slice(5, 7))}`;
+}
+
 const emptyForm = { title: '', description: '', startDate: '', endDate: '', priority: 'normal', category: '' };
 
 function FieldError({ message }) {
@@ -31,7 +48,7 @@ function ErrorBanner({ message, onClose }) {
   return (
     <div className="calendar-error" role="alert">
       <span>⚠ {message}</span>
-      <button onClick={onClose} aria-label="Cerrar aviso">✕</button>
+      <button type="button" onClick={onClose} aria-label="Cerrar aviso">✕</button>
     </div>
   );
 }
@@ -46,8 +63,12 @@ export default function Calendar({ initialYear, initialMonth }) {
   const [error, setError] = useState(null);           // mensaje general (aviso)
   const [fieldErrors, setFieldErrors] = useState({}); // errores por campo del formulario
   const [saving, setSaving] = useState(false);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState(null);
 
   const { weeks } = buildCalendar(year, month);
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
+  const editingTask = tasks.find(t => t.id === editingId);
 
   useEffect(() => {
     // Si el usuario cambia de mes rápido, una respuesta vieja podría llegar
@@ -59,8 +80,20 @@ export default function Calendar({ initialYear, initialMonth }) {
     return () => { ignore = true; };
   }, [year, month]);
 
+  // Escape cierra el modal. El listener existe solo mientras el modal está abierto
+  // y la función de limpieza lo quita al cerrarse (si no, quedaría colgado).
+  useEffect(() => {
+    if (!selectedDay) return;
+    function onKeyDown(e) {
+      if (e.key === 'Escape') closeModal();
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedDay]);
+
   function goPrev() { month === 1 ? (setMonth(12), setYear(y => y - 1)) : setMonth(m => m - 1); }
   function goNext() { month === 12 ? (setMonth(1), setYear(y => y + 1)) : setMonth(m => m + 1); }
+  function goToday() { setYear(today.getFullYear()); setMonth(today.getMonth() + 1); }
 
   function tasksForDay(day) {
     return tasks.filter(t => dayInRange(year, month, day, t));
@@ -81,6 +114,7 @@ export default function Calendar({ initialYear, initialMonth }) {
   function openDay(day) {
     setSelectedDay(day);
     setError(null);
+    setConfirmingDeleteId(null);
     resetForm(toDateKey(year, month, day));
   }
 
@@ -88,6 +122,7 @@ export default function Calendar({ initialYear, initialMonth }) {
     setSelectedDay(null);
     setError(null);
     setFieldErrors({});
+    setConfirmingDeleteId(null);
   }
 
   function startEdit(task) {
@@ -103,7 +138,9 @@ export default function Calendar({ initialYear, initialMonth }) {
     });
   }
 
-  async function saveTask() {
+  async function saveTask(e) {
+    e.preventDefault(); // el submit del <form> recargaría la página
+
     // Chequeo local solo para no hacer un pedido inútil; la validación real es del servidor
     if (!form.title.trim()) {
       setFieldErrors({ title: 'El título es obligatorio' });
@@ -143,6 +180,7 @@ export default function Calendar({ initialYear, initialMonth }) {
   }
 
   async function removeTask(id) {
+    setConfirmingDeleteId(null);
     try {
       await deleteTask(id);
       setTasks(prev => prev.filter(t => t.id !== id));
@@ -159,7 +197,10 @@ export default function Calendar({ initialYear, initialMonth }) {
       <div className="calendar-header">
         <button onClick={goPrev} className="calendar-nav">&laquo; Anterior</button>
         <h2>{MESES[month - 1]} {year}</h2>
-        <button onClick={goNext} className="calendar-nav">Siguiente &raquo;</button>
+        <div className="calendar-header-actions">
+          <button onClick={goToday} className="calendar-nav" disabled={isCurrentMonth}>Hoy</button>
+          <button onClick={goNext} className="calendar-nav">Siguiente &raquo;</button>
+        </div>
       </div>
 
       <table className="calendar-table">
@@ -188,33 +229,58 @@ export default function Calendar({ initialYear, initialMonth }) {
 
       {selectedDay && (
         <div className="calendar-modal-overlay" onClick={closeModal}>
-          <div className="calendar-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="calendar-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <ErrorBanner message={error} onClose={() => setError(null)} />
 
             <h3>{selectedDay} de {MESES[month - 1]}, {year}</h3>
 
             <ul className="calendar-task-list">
-              {tasksForDay(selectedDay).map(task => (
+              {sortForDay(tasksForDay(selectedDay)).map(task => (
                 <li key={task.id} className={task.done ? 'calendar-task-done' : ''}>
                   <input type="checkbox" checked={task.done} onChange={() => toggleDone(task)} />
                   <span className="calendar-task-priority-dot" style={{ background: COLOR_PRIORIDAD[task.priority] }} />
-                  <span onClick={() => startEdit(task)} style={{ cursor: 'pointer' }}>
-                    {task.title} {task.category && <em>({task.category})</em>}
-                  </span>
-                  <button onClick={() => removeTask(task.id)}>✕</button>
+                  <div className="calendar-task-info" onClick={() => startEdit(task)}>
+                    <span>
+                      {task.title} {task.category && <em>({task.category})</em>}
+                      {isMultiDay(task) && (
+                        <span className="calendar-task-range"> · {shortDate(task.startDate)} → {shortDate(task.endDate)}</span>
+                      )}
+                    </span>
+                    {task.description && <span className="calendar-task-description">{task.description}</span>}
+                  </div>
+                  {confirmingDeleteId === task.id ? (
+                    <span className="calendar-task-confirm">
+                      <button type="button" className="calendar-task-confirm-delete" onClick={() => removeTask(task.id)}>Borrar</button>
+                      <button type="button" onClick={() => setConfirmingDeleteId(null)}>Cancelar</button>
+                    </span>
+                  ) : (
+                    <button type="button" onClick={() => setConfirmingDeleteId(task.id)} aria-label="Borrar tarea">✕</button>
+                  )}
                 </li>
               ))}
             </ul>
 
-            <div className="calendar-task-form">
+            <form className="calendar-task-form" onSubmit={saveTask} noValidate>
+              <h4 className="calendar-form-title">
+                {editingTask ? `Editando: ${editingTask.title}` : 'Nueva tarea'}
+              </h4>
               <div className="calendar-field">
                 <input
-                  type="text" placeholder="Título" maxLength={100}
+                  type="text" placeholder="Título" maxLength={100} autoFocus
                   className={fieldErrors.title ? 'is-invalid' : ''}
                   value={form.title}
                   onChange={(e) => updateField('title', e.target.value)}
                 />
                 <FieldError message={fieldErrors.title} />
+              </div>
+              <div className="calendar-field">
+                <textarea
+                  placeholder="Descripción (opcional)" maxLength={1000} rows={2}
+                  className={fieldErrors.description ? 'is-invalid' : ''}
+                  value={form.description}
+                  onChange={(e) => updateField('description', e.target.value)}
+                />
+                <FieldError message={fieldErrors.description} />
               </div>
               <div className="calendar-task-form-row">
                 <label>Desde
@@ -229,7 +295,7 @@ export default function Calendar({ initialYear, initialMonth }) {
               <div className="calendar-task-form-row">
                 <div className="calendar-field">
                   <select className={fieldErrors.priority ? 'is-invalid' : ''} value={form.priority} onChange={(e) => updateField('priority', e.target.value)}>
-                    {PRIORIDADES.map(p => <option key={p} value={p}>{p}</option>)}
+                    {PRIORIDADES.map(p => <option key={p} value={p}>{ETIQUETA_PRIORIDAD[p]}</option>)}
                   </select>
                   <FieldError message={fieldErrors.priority} />
                 </div>
@@ -243,13 +309,13 @@ export default function Calendar({ initialYear, initialMonth }) {
                   <FieldError message={fieldErrors.category} />
                 </div>
               </div>
-              <button onClick={saveTask} disabled={saving}>
+              <button type="submit" disabled={saving}>
                 {saving ? 'Guardando…' : editingId ? 'Guardar cambios' : 'Agregar'}
               </button>
-              {editingId && <button onClick={() => resetForm(form.startDate)}>Cancelar edición</button>}
-            </div>
+              {editingId && <button type="button" onClick={() => resetForm(form.startDate)}>Cancelar edición</button>}
+            </form>
 
-            <button className="calendar-modal-close" onClick={closeModal}>Cerrar</button>
+            <button type="button" className="calendar-modal-close" onClick={closeModal}>Cerrar</button>
           </div>
         </div>
       )}
