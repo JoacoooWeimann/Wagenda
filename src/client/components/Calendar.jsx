@@ -67,7 +67,6 @@ export default function Calendar({ initialYear, initialMonth }) {
 
   const { weeks } = buildCalendar(year, month);
   const today = new Date();
-  const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
   const editingTask = tasks.find(t => t.id === editingId);
 
   useEffect(() => {
@@ -195,11 +194,16 @@ export default function Calendar({ initialYear, initialMonth }) {
       {!selectedDay && <ErrorBanner message={error} onClose={() => setError(null)} />}
 
       <div className="calendar-header">
-        <button onClick={goPrev} className="calendar-nav">&laquo; Anterior</button>
+        {/* En pantallas angostas el CSS oculta los textos y quedan solo las flechas */}
+        <button onClick={goPrev} className="calendar-nav" aria-label="Mes anterior">
+          &laquo;<span className="calendar-nav-label"> Anterior</span>
+        </button>
         <h2>{MESES[month - 1]} {year}</h2>
         <div className="calendar-header-actions">
-          <button onClick={goToday} className="calendar-nav" disabled={isCurrentMonth}>Hoy</button>
-          <button onClick={goNext} className="calendar-nav">Siguiente &raquo;</button>
+          <button onClick={goToday} className="calendar-nav">Hoy</button>
+          <button onClick={goNext} className="calendar-nav" aria-label="Mes siguiente">
+            <span className="calendar-nav-label">Siguiente </span>&raquo;
+          </button>
         </div>
       </div>
 
