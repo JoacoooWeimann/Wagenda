@@ -71,11 +71,21 @@ export async function listGoals(req, res) {
   const goals = await prisma.goal.findMany({
     where: { userId: currentUserId(req) },
     orderBy: { deadline: 'asc' },
-    include: { weeks: { select: { tasks: { select: { done: true } } } } }
+    include: {
+      weeks: {
+        orderBy: { number: 'asc' },
+        select: { number: true, startDate: true, endDate: true, label: true, tasks: { select: { done: true } } }
+      }
+    }
   });
 
-  // La lista solo necesita el progreso, no las semanas completas
-  res.json(goals.map(({ weeks, ...goal }) => ({ ...goal, progress: progressOf(weeks) })));
+  // La lista necesita el resumen de cada semana (para "Semana 3 de 6 · Unidad 4")
+  // y el progreso, pero no las tareas: esas se piden al desplegar el plan.
+  res.json(goals.map(goal => ({
+    ...goal,
+    weeks: goal.weeks.map(({ tasks, ...week }) => week),
+    progress: progressOf(goal.weeks)
+  })));
 }
 
 export async function getGoal(req, res) {

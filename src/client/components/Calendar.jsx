@@ -2,26 +2,13 @@ import { useState, useEffect } from 'react';
 import { buildCalendar, toDateKey, MESES, DIAS_SEMANA } from '../utiles/calendar.js';
 import { getTasks, createTask, updateTask, deleteTask } from '../utiles/api.js';
 import { dayInRange, highestPriority, sortForDay, isMultiDay, shortDate } from '../utiles/tasks.js';
+import { FieldError, ErrorBanner } from './common.jsx';
 
 const PRIORIDADES = ['baja', 'normal', 'alta'];
 const ETIQUETA_PRIORIDAD = { baja: 'Baja', normal: 'Normal', alta: 'Alta' };
 const COLOR_PRIORIDAD = { alta: '#ef4444', normal: '#2563eb', baja: '#9ca3af' };
 
 const emptyForm = { title: '', description: '', startDate: '', endDate: '', priority: 'normal', category: '' };
-
-function FieldError({ message }) {
-  return message ? <span className="calendar-field-error">{message}</span> : null;
-}
-
-function ErrorBanner({ message, onClose }) {
-  if (!message) return null;
-  return (
-    <div className="calendar-error" role="alert">
-      <span>⚠ {message}</span>
-      <button type="button" onClick={onClose} aria-label="Cerrar aviso">✕</button>
-    </div>
-  );
-}
 
 export default function Calendar({ initialYear, initialMonth }) {
   const [year, setYear] = useState(initialYear);

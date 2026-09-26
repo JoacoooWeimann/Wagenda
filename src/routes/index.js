@@ -14,4 +14,8 @@ router.get('/calendar', (req, res) => {
   });
 });
 
+router.get('/goals', (req, res) => {
+  res.render('goals', { title: 'Objetivos' });
+});
+
 export default router;

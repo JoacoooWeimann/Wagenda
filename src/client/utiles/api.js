@@ -38,3 +38,9 @@ export const getTasks = (year, month) => request('GET', `/api/tasks?year=${year}
 export const createTask = (task) => request('POST', '/api/tasks', task);
 export const updateTask = (id, changes) => request('PATCH', `/api/tasks/${id}`, changes);
 export const deleteTask = (id) => request('DELETE', `/api/tasks/${id}`);
+
+export const previewGoal = (goal) => request('POST', '/api/goals/preview', goal);
+export const createGoal = (goal) => request('POST', '/api/goals', goal);
+export const getGoals = () => request('GET', '/api/goals');
+export const getGoal = (id) => request('GET', `/api/goals/${id}`);
+export const deleteGoal = (id) => request('DELETE', `/api/goals/${id}`);

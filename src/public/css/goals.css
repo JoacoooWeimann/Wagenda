@@ -1,0 +1,264 @@
+/* Página de objetivos: mismo lenguaje visual que el calendario */
+.goals-container {
+  max-width: 700px;
+  margin: 40px auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #333;
+}
+
+.goals-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.goals-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.goals-title {
+  margin: 0 0 12px;
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.goals-header .goals-title { margin: 0; }
+
+.goals-empty {
+  color: #888;
+  margin: 0;
+}
+
+/* Botones */
+.goal-btn,
+.goal-btn-primary,
+.goal-btn-danger {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.goal-btn { background: #f4f5f7; color: #555; }
+.goal-btn:hover { background: #e4e6ea; }
+.goal-btn-primary { background: #2563eb; color: #fff; }
+.goal-btn-danger { background: #fee2e2; color: #b91c1c; font-weight: 600; }
+.goal-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.goal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.goal-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: #b91c1c;
+}
+
+/* Tarjeta de objetivo */
+.goal-card {
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.goal-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.goal-card-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.goal-type {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  background: #eaf2ff;
+  color: #2563eb;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.goal-meta,
+.goal-status,
+.goal-progress-text {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.goal-status-active { color: #2563eb; font-weight: 500; }
+.goal-status-finished { color: #999; }
+
+.goal-progress {
+  height: 8px;
+  background: #f0f2f5;
+  border-radius: 999px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.goal-progress-bar {
+  height: 100%;
+  background: #22c55e;
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+/* Plan semana por semana (vista previa y plan desplegado) */
+.goal-weeks {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.goal-weeks > li {
+  border-top: 1px solid #f0f0f0;
+  padding: 8px 0;
+}
+
+.goal-week-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.goal-week-label { color: #2563eb; font-weight: 500; }
+
+.goal-week-tasks {
+  list-style: none;
+  padding: 4px 0 0 12px;
+  margin: 0;
+}
+
+.goal-week-tasks li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 0.9rem;
+}
+
+.goal-task-date {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: #999;
+}
+
+.goal-task-done span:not(.goal-task-date) { text-decoration: line-through; color: #aaa; }
+.goal-task-deadline { color: #b91c1c; font-weight: 600; }
+
+.goal-preview {
+  margin-top: 16px;
+  border-top: 2px solid #eaf2ff;
+  padding-top: 12px;
+}
+
+.goal-preview h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* Formulario */
+.goal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.goal-form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.goal-form-row > label,
+.goal-strategy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.goal-strategy {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.goal-strategy legend {
+  font-size: 0.8rem;
+  margin-bottom: 4px;
+  padding: 0;
+}
+
+.goal-strategy label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.goal-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.goal-form input[type="text"],
+.goal-form input[type="date"],
+.goal-form input[type="number"],
+.goal-form select,
+.goal-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.goal-form textarea { resize: vertical; }
+.goal-form .is-invalid { border-color: #dc2626 !important; }
+
+/* Celulares */
+@media (max-width: 480px) {
+  .goals-container { margin: 16px; }
+  .goals-card { padding: 16px; }
+  .goal-form-row { flex-direction: column; }
+}

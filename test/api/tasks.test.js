@@ -117,7 +117,7 @@ describe('propiedad de los datos', () => {
 
 describe('páginas', () => {
   it('renderizan las vistas EJS con el link activo', async () => {
-    for (const [url, label] of [['/', 'Inicio'], ['/calendar', 'Calendario']]) {
+    for (const [url, label] of [['/', 'Inicio'], ['/calendar', 'Calendario'], ['/goals', 'Objetivos']]) {
       const res = await ctx.request('GET', url);
       assert.equal(res.status, 200, url);
       assert.match(res.body, new RegExp(`class="nav-link active"[^>]*>${label}<`), url);

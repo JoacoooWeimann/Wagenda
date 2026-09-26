@@ -89,13 +89,15 @@ describe('POST /api/goals', () => {
 });
 
 describe('GET /api/goals', () => {
-  it('lista por fecha límite con progreso y sin las semanas', async () => {
+  it('lista por fecha límite con progreso y el resumen de semanas (sin tareas)', async () => {
     await createGoal(running());
     await createGoal(algebra());
     const { status, body } = await ctx.request('GET', '/api/goals');
     assert.equal(status, 200);
     assert.deepEqual(body.map(g => g.title), ['Álgebra', 'Correr 10 km']);
-    assert.equal('weeks' in body[0], false);
+    assert.deepEqual(body[0].weeks.map(w => w.label),
+      ['Unidades 1–2', 'Unidad 3', 'Unidades 4–5', 'Unidad 6', 'Repaso']);
+    assert.equal('tasks' in body[0].weeks[0], false);
     assert.equal(body[1].progress.total, 8 * 3 + 1); // 8 semanas x 3 sesiones + fecha límite
   });
 });
