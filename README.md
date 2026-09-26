@@ -1,9 +1,12 @@
 # Wagenda
 
-Agenda y calendario personal. Permite organizar tareas por día, con rangos de
-fechas, prioridades y categorías. Es un proyecto de aprendizaje con desarrollo
-estructurado: versionado semántico, ramas `develop` → `main` y decisiones
-técnicas documentadas.
+Agenda y calendario personal con planificación de objetivos. Permite organizar
+tareas por día (con rangos de fechas, prioridades y categorías) y definir
+**objetivos con fecha límite**, para los que un algoritmo propio (sin IA) genera
+un plan por semanas que después se puede ajustar a mano.
+
+Es un proyecto de aprendizaje con desarrollo estructurado: versionado semántico,
+ramas `develop` → `main` y decisiones técnicas documentadas.
 
 ## Stack
 
@@ -11,8 +14,8 @@ técnicas documentadas.
 |---|---|---|
 | **Node.js + Express 5** | Servidor HTTP y API REST | Express 5 manda automáticamente los errores de los handlers `async` al manejador de errores, sin `try/catch` en cada ruta |
 | **EJS** | Vistas renderizadas en el servidor | Las páginas simples (inicio, errores) no necesitan JavaScript en el cliente |
-| **React** (como "isla") | Solo el widget interactivo del calendario | La interactividad está concentrada en un componente: React se monta en un `<div>` de la vista EJS en vez de convertir todo en una SPA |
-| **Vite** | Compila el código de React | Genera un único `app.js` que Express sirve como archivo estático |
+| **React** (como "islas") | El calendario y la página de objetivos | La interactividad está concentrada en dos widgets: React se monta en un `<div>` de cada vista EJS en vez de convertir todo en una SPA |
+| **Vite** | Compila el código de React | Un punto de entrada por isla (`app.js`, `goals.js`); React va en un chunk común que el navegador descarga una sola vez |
 | **Prisma 6 + SQLite** | Modelo de datos, migraciones y consultas | SQLite no necesita un servidor aparte. Prisma está fijado en la versión 6 porque la 7 cambia el flujo clásico de generación del cliente |
 | **node:test** | Tests unitarios y de integración | Viene incluido en Node: no suma dependencias |
 
@@ -60,24 +63,28 @@ npm run watch:client   # recompila React al guardar cambios
 
 ```
 prisma/
-  schema.prisma          Modelo de datos (User, Task, enum Priority)
+  schema.prisma          Modelo de datos
   migrations/            Historial de migraciones SQL
   seed.js                Usuario invitado (id 1)
 src/
   index.js               Punto de entrada: solo app.listen()
   app.js                 Arma la app de Express (middlewares, rutas, errores)
-  routes/                Definición de endpoints
-  controllers/           Lógica de negocio y llamadas a Prisma
+  routes/                Definición de endpoints (tasks, goals, páginas)
+  controllers/           Orquestan: validar → consultar/guardar → responder
   middlewares/           Manejo de errores y datos comunes a las vistas
-  utiles/                Utilidades del backend
+  utiles/                Utilidades del backend (sin dependencia de Express)
     db.js                  Cliente de Prisma compartido
     dates.js               Convención de fechas (ver abajo)
+    currentUser.js         Único punto que decide el usuario del pedido
+    queries.js / responses.js
     validation/            Validación de entrada (funciones puras)
+    planning/              Algoritmo de planificación (funciones puras)
   views/                 Plantillas EJS
   public/                Archivos estáticos (CSS, imágenes, build de Vite)
   client/                Todo lo que compila Vite (separado del backend)
-    main.jsx               Monta el calendario en #calendar-root
-    components/            Componentes de React
+    main.jsx / goals.jsx   Una entrada por isla
+    components/calendar/   Calendar, DayModal, TaskItem, TaskForm, SessionLogger
+    components/goals/      GoalsPage, GoalForm, GoalCard, PlanWeeks
     utiles/                Lógica pura del cliente y acceso a la API
 test/
   unit/                  Funciones puras (sin servidor ni base)
@@ -86,22 +93,109 @@ test/
 ```
 
 **Capas del backend:** `routes` → `controllers` → `utiles`. Las rutas solo
-conectan URL y handler; los controllers orquestan (validar → consultar →
-responder); `utiles` tiene funciones reutilizables sin dependencia de Express.
+conectan URL y handler; los controllers orquestan; `utiles` tiene la lógica
+reutilizable. El algoritmo de planificación y la validación son funciones puras:
+no saben nada de HTTP ni de la base.
+
+## Modelo de datos
+
+```
+User ─┬─< Task                       (tareas sueltas)
+      └─< Goal ─< GoalWeek ─< Task   (tareas de un plan)
+```
+
+| Modelo | Campos clave |
+|---|---|
+| `Task` | `title`, `startDate`/`endDate`, `priority`, `category`, `done`, `kind`, `goalWeekId?` |
+| `Goal` | `title`, `type` (académico, físico, videojuego, profesional), `strategy` (divisible, fases), `startDate`, `deadline` |
+| `GoalWeek` | `number`, `startDate`/`endDate`, `label` (ej. "Unidad 3 · TP 2", "Intensidad"), `target` (cuota) |
+
+- Las tareas de un plan **son `Task` comunes**: aparecen en el calendario y se
+  editan, marcan o borran como cualquier otra.
+- `Task.kind` distingue `tarea` (tarea común o contenido de un plan), `sesion`
+  (sesión registrada de un objetivo por fases) e `hito` (la marca de fecha límite).
+- `Task` referencia solo la semana; el objetivo se obtiene a través de ella, así
+  no puede quedar una tarea con un objetivo y una semana que no se corresponden.
+- Todo tiene `onDelete: Cascade`: borrar un objetivo borra sus semanas y sus tareas.
+
+## Objetivos y planificación
+
+### 1. Semanas
+El plazo `[inicio, fecha límite]` se divide en semanas **de lunes a domingo**,
+como las filas del calendario. La primera y la última pueden ser parciales; cada
+semana tiene una **capacidad** (días disponibles) que se usa como peso. Máximo 52
+semanas.
+
+### 2. `distribute(total, pesos)`: el núcleo del algoritmo
+Reparte un total entero entre casilleros en proporción a sus pesos, con
+**redondeo acumulado**:
+
+```
+repartido hasta i = round(total × pesos acumulados hasta i / suma de pesos)
+asignado a i      = repartido hasta i − repartido hasta i−1
+```
+
+Propiedades, verificadas con tests sobre cientos de combinaciones:
+1. La suma es exactamente `total`.
+2. En cada casillero, el acumulado está a **≤ 0,5** del reparto ideal: el avance
+   nunca se aleja más de media unidad de un ritmo parejo.
+3. Nunca asigna negativos y es determinista.
+
+Se usa para repartir contenidos entre semanas, semanas entre fases y cuotas.
+
+### 3. Estrategia "por contenido" (divisible)
+Para objetivos del tipo "6 unidades + 4 TP para el 8/11".
+- Cada **tipo de contenido se reparte por separado** con `distribute`, así cada
+  uno avanza a su propio ritmo parejo; las semanas mezclan tipos
+  (`Unidades 1–2 · TP 1`).
+- Cada contenido es una tarea que ocupa toda su semana.
+- **Repaso** opcional al final. Si la última semana tiene menos de 4 días, el
+  repaso ocupa las dos últimas, para que siempre tenga al menos 4 días.
+- Las semanas que no reciben contenido llevan una tarea de "Refuerzo".
+
+### 4. Estrategia "por fases"
+Para objetivos del tipo "correr 10 km" o "subir de rango".
+- Cuatro fases por tipo (ej. físico: Diagnóstico → Consistencia → Intensidad →
+  Evaluación). Apertura y cierre duran 1 semana; las dos del medio se reparten el
+  resto. Requiere al menos 4 semanas.
+- Cada semana tiene una **cuota de sesiones** (proporcional en semanas parciales).
+  No se fijan días: el usuario **registra cada sesión el día que la hace**.
+- El algoritmo no conoce los tipos de objetivo: el tipo solo elige los textos de
+  las fases y la estrategia sugerida. Agregar un tipo es agregar una fila a
+  `planning/templates.js`.
+
+### 5. Seguimiento
+- **Resumen semanal:** cuota futura, "llevás 1 de 3 · quedan 4 días", cuota
+  cumplida, superada o "te faltaron N".
+- **Cumplimiento del objetivo:** `Σ min(hecho, cuota) / Σ cuota`. El `min` es por
+  semana: el exceso de una semana no compensa la falta de otra, porque el plan
+  apunta a la constancia. La fecha límite (hito) no cuenta.
+- **Ritmo:** una marca en la barra indica dónde se debería estar según las
+  semanas ya cerradas, con "al día" o "atrasado N".
+
+### 6. Edición del plan
+La app genera un borrador y el usuario lo ajusta:
+- Etiqueta y cuota de cada semana, con opción de aplicar a toda la fase. Una
+  **fase es el conjunto de semanas con la misma etiqueta**: renombrarla es un
+  `updateMany` por etiqueta, y alargarla es cambiarle la etiqueta a una semana.
+- En objetivos por contenido: renombrar, mover de semana, borrar y agregar
+  contenidos. Mover una tarea (también desde el calendario) la pasa a la semana
+  que contiene su nueva fecha.
+- La fecha límite no se mueve.
 
 ## API
 
-Todas las rutas trabajan sobre las tareas del usuario actual (por ahora, el
+Todas las rutas trabajan sobre los datos del usuario actual (por ahora, el
 invitado con id 1).
+
+### Tareas
 
 | Método | Ruta | Descripción | Respuesta OK |
 |---|---|---|---|
-| `GET` | `/api/tasks?year=2026&month=9` | Tareas que tocan ese mes (incluye rangos que empiezan o terminan en otro mes) | `200` + lista |
+| `GET` | `/api/tasks?year=2026&month=9` | Tareas que tocan ese mes (con su objetivo y semana, si pertenecen a un plan) | `200` + lista |
 | `POST` | `/api/tasks` | Crea una tarea | `201` + tarea |
-| `PATCH` | `/api/tasks/:id` | Actualiza solo los campos enviados | `200` + tarea |
+| `PATCH` | `/api/tasks/:id` | Actualiza solo los campos enviados. En una tarea de un plan, cambiar fechas la pasa de semana | `200` + tarea |
 | `DELETE` | `/api/tasks/:id` | Borra la tarea | `200` + `{ ok: true }` |
-
-**Campos de una tarea**
 
 | Campo | Regla |
 |---|---|
@@ -113,17 +207,39 @@ invitado con id 1).
 | `category` | Opcional, máximo 30 caracteres |
 | `done` | `true` o `false` (booleano estricto) |
 
-Cualquier otro campo del body se ignora: por ejemplo, el cliente no puede
-cambiar `userId`.
+### Objetivos
 
-**Formato de errores**
+| Método | Ruta | Descripción | Respuesta OK |
+|---|---|---|---|
+| `POST` | `/api/goals/preview` | Genera el plan **sin guardarlo** | `200` + plan |
+| `POST` | `/api/goals` | Genera y guarda objetivo, semanas y tareas | `201` + objetivo |
+| `GET` | `/api/goals` | Objetivos con progreso y resumen de semanas (sin tareas) | `200` + lista |
+| `GET` | `/api/goals/:id` | Objetivo con semanas, tareas y progreso | `200` + objetivo |
+| `DELETE` | `/api/goals/:id` | Borra el objetivo, sus semanas y sus tareas | `200` + `{ ok: true }` |
+| `POST` | `/api/goals/:id/sessions` | `{ date }`: registra una sesión (solo por fases) | `201` + tarea |
+| `PATCH` | `/api/goals/:id/weeks/:weekId` | `{ label?, target?, applyToPhase? }` (`target` solo por fases, 0–14) | `200` + objetivo |
+| `POST` | `/api/goals/:id/weeks/:weekId/tasks` | `{ title }`: agrega un contenido (solo por contenido) | `201` + tarea |
+
+| Campo (crear) | Regla |
+|---|---|
+| `title` | Obligatorio, 1–100 caracteres |
+| `type` | `academico`, `fisico`, `videojuego` o `profesional` |
+| `strategy` | `divisible` o `fases`. Si no viene, la sugerida para el tipo |
+| `startDate`, `deadline` | `"YYYY-MM-DD"`, `deadline ≥ startDate`, hasta 52 semanas |
+| `contents` | Solo `divisible`: `[{ name, count }]`, 1–5 tipos, 1–100 de cada uno, sin nombres repetidos |
+| `reviewWeek` | Solo `divisible`, booleano (por defecto `true`) |
+| `sessionsPerWeek` | Solo `fases`, entero 1–7 |
+
+### Errores
 
 ```json
-{ "error": "Datos inválidos", "fields": { "title": "El título es obligatorio" } }
+{ "error": "Datos inválidos", "fields": { "deadline": "La estrategia por fases necesita al menos 4 semanas" } }
 ```
 
-- `400`: datos inválidos. `fields` trae **todos** los errores juntos, para que el formulario marque cada campo.
-- `404`: la tarea no existe o pertenece a otro usuario (no se distingue, para no revelar qué ids existen).
+- `400`: datos inválidos. `fields` trae **todos** los errores juntos, para que el
+  formulario marque cada campo. Incluye los errores del algoritmo (`PlanError`),
+  como un plazo demasiado corto.
+- `404`: el recurso no existe o pertenece a otro usuario (no se distingue, para no revelar qué ids existen).
 - `500`: error inesperado. El cliente recibe un mensaje genérico; el detalle queda solo en el log del servidor.
 
 Las rutas `/api/*` responden errores en JSON; las páginas responden la vista
@@ -142,21 +258,55 @@ En v1.1 se comparaban objetos `Date` en hora local: en Argentina (UTC-3), las
 tareas de un día no se mostraban y los rangos perdían su último día. Un test de
 regresión corre esa lógica en cuatro zonas horarias.
 
+Por el mismo motivo, **"hoy" lo decide el cliente**: el servidor corre en UTC y
+a las 22:00 en Argentina ya es el día siguiente. El inicio de un objetivo, la
+semana actual y el ritmo se calculan con la fecha de la computadora del usuario.
+
 ### Validación como funciones puras
 `src/utiles/validation/` no depende de Express ni de Prisma: recibe el body y
 devuelve `{ data, fields }`. Se puede testear sin servidor, y `data` solo trae
-campos permitidos (whitelist). La única regla que necesita la base (en un PATCH,
-comparar la fecha nueva con la guardada) la resuelve el controller.
+campos permitidos (whitelist). Las reglas que necesitan la base (comparar con
+fechas guardadas, la semana de una tarea) las resuelve el controller.
 
 ### Errores esperados e inesperados
-Los errores **esperados** (validación, tarea inexistente) los responde el
-controller. Los **inesperados** llegan al middleware `errorHandler`, que decide
-en un único lugar el formato de la respuesta y qué se registra en el log.
+Los errores **esperados** (validación, recurso inexistente, `PlanError`) los
+responde el controller. Los **inesperados** llegan al middleware `errorHandler`,
+que decide en un único lugar el formato de la respuesta y qué se registra en el log.
 
 ### Propiedad de los datos
-`update` y `delete` filtran por `id` **y** `userId`. Con varios usuarios, nadie
-puede modificar tareas ajenas. Hoy hay un solo usuario, pero así el login futuro
-solo cambia de dónde sale el `userId`.
+Toda consulta filtra por `id` **y** `userId`, que sale de `currentUserId(req)`.
+Hoy siempre es el invitado; con login, esa función va a leer la sesión y ningún
+controller va a cambiar.
+
+### El algoritmo es puro y determinista
+`generatePlan` recibe un objetivo validado y devuelve el plan en memoria, sin
+tocar la base. Eso permite:
+- **Vista previa** sin guardar nada.
+- **"Crear plan" reenvía el formulario, no el plan:** el servidor lo vuelve a
+  generar (misma entrada, mismo plan) y nunca acepta un plan armado por el
+  cliente, que podría traer, por ejemplo, 10.000 tareas.
+- **Creación atómica:** un único `prisma.goal.create` con semanas y tareas
+  anidadas, que Prisma ejecuta en una transacción.
+
+### Qué se guarda y qué se calcula
+- **Cuota por contenido: calculada.** Es la cantidad de contenidos de la semana,
+  así mover, agregar o borrar uno la ajusta sola. Un dato derivado no se
+  desincroniza.
+- **Cuota por fases: guardada.** No sale de ningún otro dato: la decide el usuario.
+- **Parámetros de generación (contenidos, sesiones por semana, repaso): no se
+  guardan.** Con el plan editable, "6 unidades" dejaría de ser cierto apenas se
+  agrega una; la fuente de verdad son las semanas y las tareas.
+- **`Task.kind` explícito** en vez de reconocer el hito por su título: si el
+  texto cambia, un cálculo basado en el título se rompe en silencio.
+
+### Migraciones con datos existentes
+Dos migraciones se escribieron a mano, porque Prisma no puede decidir qué hacer
+con los datos existentes:
+- `week_target_task_kind` agrega columnas obligatorias y **calcula sus valores**
+  a partir de los datos (cuota = tareas de la semana; `kind = 'hito'` para la
+  fecha límite).
+- `drop_goal_generation_params` borra columnas; se generó con `prisma migrate diff`
+  porque `migrate dev` pide confirmación interactiva cuando se pierden datos.
 
 ### Índice compuesto `[userId, startDate]`
 La consulta más frecuente es "tareas del usuario en este mes, ordenadas por
@@ -165,17 +315,24 @@ fecha". Según `EXPLAIN QUERY PLAN`, con índices separados SQLite usaba solo el
 filtra, recorta el rango y ordena en un solo paso. Como empieza por `userId`,
 también sirve para las búsquedas por foreign key.
 
+### Componentes que se reinician con `key`
+`DayModal`, `TaskForm` y los editores del plan se montan con una `key` (el día,
+la tarea en edición o los datos de la semana). Cuando la `key` cambia, React crea
+el componente de nuevo con estado limpio, en vez de resetearlo a mano.
+
 ### Tests aislados
 Los tests de integración usan una base SQLite propia por proceso
 (`prisma/test-<pid>.db`), creada con las mismas migraciones y borrada al
 terminar: nunca tocan `dev.db`. La app escucha en el puerto 0 (el sistema
 operativo asigna uno libre), así los tests pueden correr con el servidor de
-desarrollo levantado.
+desarrollo levantado. Hay 158 tests; la lógica de planificación está cubierta
+al 100%.
 
 ## Roadmap
 
 - [x] **v1.0** — Calendario navegable
 - [x] **v1.1** — Tareas persistidas (SQLite + Prisma), rangos, prioridad y categoría
 - [x] **v1.2 · Fase 1** — Pulido: fechas independientes de la zona horaria, validación, manejo de errores, índices, UX, tests
-- [ ] **v1.2 · Fase 2** — Objetivos y planificación: el usuario define un objetivo con fecha límite y un algoritmo propio (sin IA) genera un plan por semanas (`Goal` → `GoalWeek` → `Task`)
+- [x] **v1.2 · Fase 2** — Objetivos: plan automático por semanas (por contenido o por fases), cuotas semanales, registro de sesiones, seguimiento y edición del plan
+- [ ] Cambiar el plazo de un objetivo ya creado (qué hacer con lo que queda fuera)
 - [ ] Login y múltiples usuarios
