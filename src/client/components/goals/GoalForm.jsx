@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { previewGoal, createGoal } from '../../utiles/api.js';
-import { GOAL_TYPES, suggestedStrategy, todayKey, buildGoalPayload, countNoun } from '../../utiles/goals.js';
+import { GOAL_TYPES, suggestedStrategy, todayKey, buildGoalPayload, countNoun, MAX_CONTENT_TYPES } from '../../utiles/goals.js';
 import { FieldError, ErrorBanner } from '../common.jsx';
 import PlanWeeks from './PlanWeeks.jsx';
 
@@ -11,8 +11,7 @@ const initialForm = () => ({
   strategy: 'divisible',
   startDate: todayKey(),
   deadline: '',
-  totalUnits: '',
-  unitName: '',
+  contents: [{ name: 'Unidad', count: '' }],
   reviewWeek: true,
   sessionsPerWeek: '3'
 });
@@ -42,6 +41,13 @@ export default function GoalForm({ onCreated, onCancel }) {
     setStrategyTouched(true);
     updateField('strategy', strategy);
   }
+
+  // Filas de tipos de contenido: todas comparten el error `contents`
+  function updateContent(index, field, value) {
+    updateField('contents', form.contents.map((c, i) => (i === index ? { ...c, [field]: value } : c)));
+  }
+  const addContent = () => updateField('contents', [...form.contents, { name: '', count: '' }]);
+  const removeContent = (index) => updateField('contents', form.contents.filter((_, i) => i !== index));
 
   function showError(err) {
     const fields = err.fields || {};
@@ -126,18 +132,26 @@ export default function GoalForm({ onCreated, onCancel }) {
 
         {form.strategy === 'divisible' ? (
           <>
-            <div className="goal-form-row">
-              <label>Cantidad
-                <input type="number" min={1} max={100} className={invalid('totalUnits')} value={form.totalUnits}
-                  onChange={(e) => updateField('totalUnits', e.target.value)} />
-                <FieldError message={fieldErrors.totalUnits} />
-              </label>
-              <label>Nombre de la unidad
-                <input type="text" placeholder="Unidad" maxLength={30} className={invalid('unitName')} value={form.unitName}
-                  onChange={(e) => updateField('unitName', e.target.value)} />
-                <FieldError message={fieldErrors.unitName} />
-              </label>
-            </div>
+            <fieldset className="goal-contents">
+              <legend>Contenidos</legend>
+              {form.contents.map((content, i) => (
+                <div className="goal-content-row" key={i}>
+                  <input type="number" min={1} max={100} placeholder="Cant." aria-label={`Cantidad del contenido ${i + 1}`}
+                    className={invalid('contents')} value={content.count}
+                    onChange={(e) => updateContent(i, 'count', e.target.value)} />
+                  <input type="text" maxLength={30} placeholder="Nombre (ej. Unidad, TP)" aria-label={`Nombre del contenido ${i + 1}`}
+                    className={invalid('contents')} value={content.name}
+                    onChange={(e) => updateContent(i, 'name', e.target.value)} />
+                  {form.contents.length > 1 && (
+                    <button type="button" className="goal-task-remove" onClick={() => removeContent(i)} aria-label={`Quitar contenido ${i + 1}`}>✕</button>
+                  )}
+                </div>
+              ))}
+              {form.contents.length < MAX_CONTENT_TYPES && (
+                <button type="button" className="goal-btn goal-btn-small" onClick={addContent}>+ Agregar tipo de contenido</button>
+              )}
+              <FieldError message={fieldErrors.contents} />
+            </fieldset>
             <label className="goal-checkbox">
               <input type="checkbox" checked={form.reviewWeek} onChange={(e) => updateField('reviewWeek', e.target.checked)} />
               Reservar el final para repaso

@@ -119,8 +119,7 @@ export function buildGoalPayload(form) {
     deadline: form.deadline
   };
   if (form.strategy === 'divisible') {
-    payload.totalUnits = toInt(form.totalUnits);
-    payload.unitName = form.unitName;
+    payload.contents = form.contents.map(c => ({ name: c.name, count: toInt(c.count) }));
     payload.reviewWeek = form.reviewWeek;
   } else {
     payload.sessionsPerWeek = toInt(form.sessionsPerWeek);
@@ -135,3 +134,5 @@ export function calendarLink(goal, today) {
   const key = kind === 'upcoming' ? goal.startDate : kind === 'finished' ? goal.deadline : today;
   return `/calendar?year=${Number(key.slice(0, 4))}&month=${Number(key.slice(5, 7))}`;
 }
+
+export const MAX_CONTENT_TYPES = 5;

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getGoal, updateTask, deleteTask, logSession } from '../../utiles/api.js';
+import { getGoal, updateTask, deleteTask, logSession, updateWeek, addWeekTask } from '../../utiles/api.js';
 import {
   typeLabel, goalStatus, deadlineText, dayMonth, withWeekDone, progressFromWeeks,
   paceOf, percent, countNoun, calendarLink
@@ -12,6 +12,7 @@ export default function GoalCard({ goal, today, onDelete, onError }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [sessionDate, setSessionDate] = useState(today);
   const [logging, setLogging] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   // Con el plan cargado, `done` se recalcula de sus tareas: así la tarjeta refleja
   // lo que se marca en esta página sin volver a pedir la lista
@@ -79,6 +80,33 @@ export default function GoalCard({ goal, today, onDelete, onError }) {
     }
   }
 
+  // Edición del plan: cada cambio es una operación chica validada por el servidor;
+  // después se recarga el plan, porque el servidor recalcula semanas y cuotas.
+  async function mutate(action, errorPrefix) {
+    try {
+      const result = await action();
+      if (result?.weeks) setDetail(result); // updateWeek ya devuelve el objetivo completo
+      else await reload();
+    } catch (err) {
+      const fieldMessage = Object.values(err.fields || {})[0];
+      onError(`${errorPrefix}: ${fieldMessage || err.message}`);
+    }
+  }
+
+  const dateOnly = (iso) => iso.slice(0, 10);
+  const edit = {
+    onUpdateWeek: (week, changes) =>
+      mutate(() => updateWeek(goal.id, week.id, changes), 'No se pudo editar la semana'),
+    onRenameTask: (task, title) =>
+      mutate(() => updateTask(task.id, { title }), 'No se pudo renombrar'),
+    onMoveTask: (task, week) =>
+      mutate(() => updateTask(task.id, { startDate: dateOnly(week.startDate), endDate: dateOnly(week.endDate) }), 'No se pudo mover'),
+    onDeleteTask: (task) =>
+      mutate(() => deleteTask(task.id), 'No se pudo borrar'),
+    onAddTask: (week, title) =>
+      mutate(() => addWeekTask(goal.id, week.id, title), 'No se pudo agregar')
+  };
+
   return (
     <article className="goal-card">
       <div className="goal-card-header">
@@ -122,6 +150,11 @@ export default function GoalCard({ goal, today, onDelete, onError }) {
         <button type="button" className="goal-btn" onClick={toggleOpen} aria-expanded={open}>
           {open ? 'Ocultar plan ▴' : 'Ver plan ▾'}
         </button>
+        {open && (
+          <button type="button" className={editing ? 'goal-btn-primary' : 'goal-btn'} onClick={() => setEditing(e => !e)}>
+            {editing ? 'Listo' : 'Editar plan'}
+          </button>
+        )}
         <a className="goal-btn" href={calendarLink(goal, today)}>Ver en calendario</a>
         {confirmingDelete ? (
           <span className="goal-confirm">
@@ -141,6 +174,7 @@ export default function GoalCard({ goal, today, onDelete, onError }) {
           today={today}
           onToggle={toggleTask}
           onDeleteSession={removeSession}
+          edit={editing ? edit : null}
         />
       )}
     </article>

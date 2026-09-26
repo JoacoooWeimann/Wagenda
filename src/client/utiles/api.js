@@ -45,3 +45,5 @@ export const getGoals = () => request('GET', '/api/goals');
 export const getGoal = (id) => request('GET', `/api/goals/${id}`);
 export const deleteGoal = (id) => request('DELETE', `/api/goals/${id}`);
 export const logSession = (goalId, date) => request('POST', `/api/goals/${goalId}/sessions`, { date });
+export const updateWeek = (goalId, weekId, changes) => request('PATCH', `/api/goals/${goalId}/weeks/${weekId}`, changes);
+export const addWeekTask = (goalId, weekId, title) => request('POST', `/api/goals/${goalId}/weeks/${weekId}/tasks`, { title });

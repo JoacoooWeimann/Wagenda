@@ -310,3 +310,64 @@
   .goal-week-summary { margin-left: 0; width: 100%; }
 }
 a.goal-btn { text-decoration: none; display: inline-block; }
+
+/* Contenidos del formulario */
+.goal-contents {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.goal-contents legend {
+  font-size: 0.8rem;
+  color: #666;
+  padding: 0;
+  margin-bottom: 4px;
+}
+
+.goal-content-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.goal-form .goal-content-row input[type="number"] { width: 80px; flex-shrink: 0; }
+.goal-btn-small { padding: 4px 10px; font-size: 0.8rem; align-self: flex-start; }
+
+/* Modo edición del plan */
+.goal-week-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 4px;
+}
+
+.goal-week-editor input[type="text"] { flex: 1; min-width: 140px; }
+.goal-week-target { display: flex; align-items: center; gap: 4px; font-size: 0.8rem; color: #666; }
+.goal-week-target input { width: 56px; }
+.goal-week-apply { font-size: 0.8rem; color: #666; }
+
+.goal-week-editor input,
+.goal-task-editable input,
+.goal-task-editable select,
+.goal-add-content input {
+  padding: 4px 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.goal-task-editable input[type="text"] { flex: 1; min-width: 0; }
+
+.goal-add-content {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0 0 12px;
+}
+
+.goal-add-content input { flex: 1; min-width: 0; }
