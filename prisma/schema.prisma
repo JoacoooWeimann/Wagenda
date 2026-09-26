@@ -41,17 +41,16 @@ model User {
 }
 
 model Goal {
-  id              Int          @id @default(autoincrement())
-  title           String
-  description     String?
-  type            GoalType
-  strategy        PlanStrategy
-  startDate       DateTime
-  deadline        DateTime
-  totalUnits      Int? // solo "divisible": cuántas unidades hay
-  unitName        String? // solo "divisible": "Unidad", "Capítulo", "Nivel"...
-  sessionsPerWeek Int? // solo "fases": sesiones por semana (1–7)
-  createdAt       DateTime     @default(now())
+  id          Int          @id @default(autoincrement())
+  title       String
+  description String?
+  type        GoalType
+  strategy    PlanStrategy
+  startDate   DateTime
+  deadline    DateTime
+  // Los parámetros de generación (contenidos, sesiones por semana, repaso) no se
+  // guardan: el plan es editable, así que la fuente de verdad son sus semanas y tareas.
+  createdAt   DateTime     @default(now())
 
   user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId Int

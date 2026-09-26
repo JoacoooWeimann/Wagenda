@@ -32,24 +32,39 @@ export function reviewWeekCount(weeks, reviewWeek) {
   return 1;
 }
 
-// --- Estrategia "divisible": N unidades repartidas entre las semanas ---------
-// Cada unidad es una tarea que ocupa toda su semana. Con reviewWeek, las
-// semanas finales se reservan para repaso (ver reviewWeekCount).
-export function planDivisible(weeks, { totalUnits, unitName = 'Unidad', reviewWeek }) {
+// --- Estrategia "divisible": contenidos repartidos entre las semanas ---------
+// Cada tipo de contenido (ej. 6 "Unidad" + 4 "TP") se reparte POR SEPARADO con
+// distribute: así cada tipo avanza a su propio ritmo parejo y las propiedades de
+// distribute valen para cada uno. Cada contenido es una tarea que ocupa su semana.
+// Con reviewWeek, las semanas finales se reservan para repaso (ver reviewWeekCount).
+export const LABEL_MAX = 50;
+
+export function planDivisible(weeks, { contents, reviewWeek }) {
   const reviewCount = reviewWeekCount(weeks, reviewWeek);
   const contentWeeks = weeks.slice(0, weeks.length - reviewCount);
 
-  // La capacidad (días) es el peso: las semanas parciales reciben menos unidades
-  const counts = distribute(totalUnits, contentWeeks.map(w => w.days));
+  // La capacidad (días) es el peso: las semanas parciales reciben menos
+  const capacities = contentWeeks.map(w => w.days);
+  const countsByType = contents.map(c => distribute(c.count, capacities));
+  const nextNumber = contents.map(() => 1);
 
-  let nextUnit = 1;
   const planned = contentWeeks.map((week, i) => {
-    const units = Array.from({ length: counts[i] }, () => nextUnit++);
     const span = { startDate: week.startDate, endDate: week.endDate };
+    const tasks = [];
+    const labelParts = [];
 
-    if (units.length === 0) {
-      // Pasa cuando hay menos unidades que semanas: se usa para afianzar lo visto
-      const nothingYet = nextUnit === 1;
+    contents.forEach((content, t) => {
+      const numbers = Array.from({ length: countsByType[t][i] }, () => nextNumber[t]++);
+      if (numbers.length === 0) return;
+      tasks.push(...numbers.map(n => ({ ...span, title: `${content.name} ${n}` })));
+      labelParts.push(numbers.length === 1
+        ? `${content.name} ${numbers[0]}`
+        : `${pluralize(content.name)} ${numbers[0]}–${numbers.at(-1)}`);
+    });
+
+    if (tasks.length === 0) {
+      // Pasa cuando hay menos contenidos que semanas: se usa para afianzar lo visto
+      const nothingYet = nextNumber.every(n => n === 1);
       return {
         ...week,
         label: nothingYet ? 'Preparación' : 'Refuerzo',
@@ -61,15 +76,7 @@ export function planDivisible(weeks, { totalUnits, unitName = 'Unidad', reviewWe
       };
     }
 
-    const label = units.length === 1
-      ? `${unitName} ${units[0]}`
-      : `${pluralize(unitName)} ${units[0]}–${units.at(-1)}`;
-    return {
-      ...week,
-      label,
-      target: units.length,
-      tasks: units.map(n => ({ ...span, title: `${unitName} ${n}` }))
-    };
+    return { ...week, label: truncate(labelParts.join(' · '), LABEL_MAX), target: tasks.length, tasks };
   });
 
   // Una tarea por semana de repaso: cada tarea tiene que quedar dentro de su semana
@@ -83,6 +90,10 @@ export function planDivisible(weeks, { totalUnits, unitName = 'Unidad', reviewWe
     });
   });
   return planned;
+}
+
+function truncate(text, max) {
+  return text.length <= max ? text : text.slice(0, max - 1) + '…';
 }
 
 // --- Estrategia "fases": progresión en 4 fases con cuota semanal de sesiones --

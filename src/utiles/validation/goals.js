@@ -6,7 +6,7 @@ import { TYPE_LABELS, DEFAULT_STRATEGY } from '../planning/templates.js';
 
 export const GOAL_TYPES = Object.keys(TYPE_LABELS);
 export const STRATEGIES = ['divisible', 'fases'];
-export const GOAL_LIMITS = { title: 100, description: 1000, unitName: 30, totalUnits: 100 };
+export const GOAL_LIMITS = { title: 100, description: 1000, contentTypes: 5, contentName: 30, contentCount: 100 };
 
 export function validateGoalCreate(body = {}) {
   const fields = {};
@@ -44,13 +44,8 @@ export function validateGoalCreate(body = {}) {
 
   // Parámetros según la estrategia. Los de la otra estrategia se ignoran (whitelist).
   if (data.strategy === 'divisible') {
-    const totalUnits = intInRange(body.totalUnits, 1, GOAL_LIMITS.totalUnits, 'totalUnits', fields);
-    if (totalUnits !== undefined) data.totalUnits = totalUnits;
-
-    const unitName = body.unitName === undefined
-      ? null
-      : optionalText(body.unitName, GOAL_LIMITS.unitName, 'unitName', fields);
-    if (unitName !== undefined) data.unitName = unitName ?? 'Unidad';
+    const contents = validateContents(body.contents, fields);
+    if (contents) data.contents = contents;
 
     if (body.reviewWeek === undefined) data.reviewWeek = true;
     else if (typeof body.reviewWeek === 'boolean') data.reviewWeek = body.reviewWeek;
@@ -63,6 +58,41 @@ export function validateGoalCreate(body = {}) {
   }
 
   return { data, fields };
+}
+
+// Tipos de contenido de un objetivo divisible: [{ name, count }], ej.
+// [{ name: 'Unidad', count: 6 }, { name: 'TP', count: 4 }]. Un solo mensaje de
+// error en `contents`, indicando cuál fila falla.
+function validateContents(value, fields) {
+  const { contentTypes, contentName, contentCount } = GOAL_LIMITS;
+  if (!Array.isArray(value) || value.length === 0) {
+    fields.contents = 'Agregá al menos un tipo de contenido';
+    return undefined;
+  }
+  if (value.length > contentTypes) {
+    fields.contents = `Máximo ${contentTypes} tipos de contenido`;
+    return undefined;
+  }
+
+  const contents = [];
+  for (const [i, item] of value.entries()) {
+    const rowFields = {};
+    const name = requiredText(item?.name, contentName, 'name', rowFields, 'falta el nombre');
+    const count = intInRange(item?.count, 1, contentCount, 'count', rowFields);
+    if (hasErrors(rowFields)) {
+      fields.contents = `Contenido ${i + 1}: ${rowFields.name || `la cantidad debe ser un entero entre 1 y ${contentCount}`}`;
+      return undefined;
+    }
+    contents.push({ name, count });
+  }
+
+  // Nombres repetidos generarían tareas con el mismo título ("TP 1" dos veces)
+  const names = contents.map(c => c.name.toLowerCase());
+  if (new Set(names).size !== names.length) {
+    fields.contents = 'Hay tipos de contenido con el mismo nombre';
+    return undefined;
+  }
+  return contents;
 }
 
 export const WEEK_LIMITS = { label: 50, target: 14 };

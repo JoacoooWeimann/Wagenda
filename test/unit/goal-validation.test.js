@@ -4,7 +4,7 @@ import { validateGoalCreate, validateWeekUpdate } from '../../src/utiles/validat
 
 const divisible = (extra = {}) => ({
   title: 'Álgebra', type: 'academico', strategy: 'divisible',
-  startDate: '2026-10-05', deadline: '2026-11-08', totalUnits: 6, ...extra
+  startDate: '2026-10-05', deadline: '2026-11-08', contents: [{ name: 'Unidad', count: 6 }], ...extra
 });
 const fases = (extra = {}) => ({
   title: 'Correr 10 km', type: 'fisico', strategy: 'fases',
@@ -15,7 +15,7 @@ describe('validateGoalCreate', () => {
   it('acepta un objetivo divisible y aplica defaults', () => {
     const { data, fields } = validateGoalCreate(divisible());
     assert.deepEqual(fields, {});
-    assert.equal(data.unitName, 'Unidad');
+    assert.deepEqual(data.contents, [{ name: 'Unidad', count: 6 }]);
     assert.equal(data.reviewWeek, true);
     assert.equal(data.startDate.toISOString(), '2026-10-05T00:00:00.000Z');
   });
@@ -34,13 +34,13 @@ describe('validateGoalCreate', () => {
   });
 
   it('exige los parámetros de la estrategia elegida', () => {
-    assert.ok(validateGoalCreate(divisible({ totalUnits: undefined })).fields.totalUnits);
+    assert.ok(validateGoalCreate(divisible({ contents: undefined })).fields.contents);
     assert.ok(validateGoalCreate(fases({ sessionsPerWeek: undefined })).fields.sessionsPerWeek);
   });
 
   it('valida los rangos de los parámetros', () => {
-    for (const totalUnits of [0, 101, 2.5, '6']) {
-      assert.ok(validateGoalCreate(divisible({ totalUnits })).fields.totalUnits, String(totalUnits));
+    for (const count of [0, 101, 2.5, '6']) {
+      assert.ok(validateGoalCreate(divisible({ contents: [{ name: 'Unidad', count }] })).fields.contents, String(count));
     }
     for (const sessionsPerWeek of [0, 8, '3']) {
       assert.ok(validateGoalCreate(fases({ sessionsPerWeek })).fields.sessionsPerWeek, String(sessionsPerWeek));
@@ -51,8 +51,8 @@ describe('validateGoalCreate', () => {
     const { data } = validateGoalCreate(divisible({ sessionsPerWeek: 3, userId: 9 }));
     assert.equal('sessionsPerWeek' in data, false);
     assert.equal('userId' in data, false);
-    const { data: data2 } = validateGoalCreate(fases({ totalUnits: 6, reviewWeek: false }));
-    assert.equal('totalUnits' in data2, false);
+    const { data: data2 } = validateGoalCreate(fases({ contents: [{ name: 'x', count: 1 }], reviewWeek: false }));
+    assert.equal('contents' in data2, false);
     assert.equal('reviewWeek' in data2, false);
   });
 
@@ -65,9 +65,18 @@ describe('validateGoalCreate', () => {
     assert.ok(validateGoalCreate(divisible({ deadline: '2026-10-01' })).fields.deadline);
   });
 
-  it('unitName vacío usa "Unidad"; reviewWeek tiene que ser booleano', () => {
-    assert.equal(validateGoalCreate(divisible({ unitName: '  ' })).data.unitName, 'Unidad');
-    assert.equal(validateGoalCreate(divisible({ unitName: ' Capítulo ' })).data.unitName, 'Capítulo');
+  it('contents: recorta nombres, exige nombre, limita tipos y rechaza repetidos', () => {
+    const ok = validateGoalCreate(divisible({ contents: [{ name: ' Unidad ', count: 6 }, { name: 'TP', count: 4 }] }));
+    assert.deepEqual(ok.data.contents, [{ name: 'Unidad', count: 6 }, { name: 'TP', count: 4 }]);
+
+    assert.match(validateGoalCreate(divisible({ contents: [{ name: 'A', count: 1 }, { name: ' ', count: 2 }] })).fields.contents, /Contenido 2/);
+    assert.ok(validateGoalCreate(divisible({ contents: [] })).fields.contents);
+    const six = Array.from({ length: 6 }, (_, i) => ({ name: `T${i}`, count: 1 }));
+    assert.match(validateGoalCreate(divisible({ contents: six })).fields.contents, /Máximo 5/);
+    assert.match(validateGoalCreate(divisible({ contents: [{ name: 'TP', count: 1 }, { name: 'tp', count: 2 }] })).fields.contents, /mismo nombre/);
+  });
+
+  it('reviewWeek tiene que ser booleano', () => {
     assert.ok(validateGoalCreate(divisible({ reviewWeek: 'no' })).fields.reviewWeek);
   });
 });

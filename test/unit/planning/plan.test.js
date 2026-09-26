@@ -12,7 +12,7 @@ const weekday = (date) => ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'][da
 const algebra = (extra = {}) => ({
   title: 'Álgebra', type: 'academico', strategy: 'divisible',
   startDate: d('2026-10-05'), deadline: d('2026-11-08'), // 5 semanas completas
-  totalUnits: 6, unitName: 'Unidad', reviewWeek: true, ...extra
+  contents: [{ name: 'Unidad', count: 6 }], reviewWeek: true, ...extra
 });
 
 const running = (extra = {}) => ({
@@ -48,7 +48,7 @@ describe('estrategia divisible', () => {
   });
 
   it('con menos de 3 semanas no reserva repaso', () => {
-    const { weeks } = generatePlan(algebra({ deadline: d('2026-10-18'), totalUnits: 2 }));
+    const { weeks } = generatePlan(algebra({ deadline: d('2026-10-18'), contents: [{ name: 'Unidad', count: 2 }] }));
     assert.deepEqual(weeks.map(w => w.label), ['Unidad 1', 'Unidad 2']);
   });
 
@@ -74,7 +74,7 @@ describe('estrategia divisible', () => {
   });
 
   it('las semanas sin unidades nuevas llevan una tarea de refuerzo', () => {
-    const { weeks } = generatePlan(algebra({ totalUnits: 2, reviewWeek: false }));
+    const { weeks } = generatePlan(algebra({ contents: [{ name: 'Unidad', count: 2 }], reviewWeek: false }));
     // 2 unidades en 5 semanas -> [0,1,0,1,0]
     assert.deepEqual(weeks.map(w => w.label), ['Preparación', 'Unidad 1', 'Refuerzo', 'Unidad 2', 'Refuerzo']);
     assert.ok(weeks.every(w => w.tasks.length >= 1));
@@ -85,8 +85,39 @@ describe('estrategia divisible', () => {
     assert.equal(pluralize('Capítulo'), 'Capítulos');
     assert.equal(pluralize('Nivel'), 'Niveles');
     assert.equal(pluralize('Lección'), 'Lecciones');
-    const { weeks } = generatePlan(algebra({ unitName: 'Capítulo' }));
+    const { weeks } = generatePlan(algebra({ contents: [{ name: 'Capítulo', count: 6 }] }));
     assert.equal(weeks[0].label, 'Capítulos 1–2');
+  });
+});
+
+describe('varios tipos de contenido', () => {
+  const mixed = () => algebra({
+    contents: [{ name: 'Unidad', count: 6 }, { name: 'TP', count: 4 }, { name: 'Parcial', count: 2 }]
+  });
+
+  it('cada tipo se reparte por separado y se mezclan en cada semana', () => {
+    const { weeks } = generatePlan(mixed());
+    assert.deepEqual(weeks.map(w => w.label), [
+      'Unidades 1–2 · TP 1 · Parcial 1',
+      'Unidad 3 · TP 2',
+      'Unidades 4–5 · TP 3 · Parcial 2',
+      'Unidad 6 · TP 4',
+      'Repaso'
+    ]);
+    assert.deepEqual(workTasks(weeks[1]).map(t => t.title), ['Unidad 3', 'TP 2']);
+    assert.deepEqual(weeks.map(w => w.target), [4, 2, 4, 2, 1]);
+  });
+
+  it('las etiquetas largas se cortan a 50 caracteres', () => {
+    const { weeks } = generatePlan(algebra({
+      contents: [
+        { name: 'Trabajo práctico integrador', count: 8 },
+        { name: 'Ejercitación adicional', count: 8 }
+      ],
+      reviewWeek: false
+    }));
+    assert.ok(weeks.some(w => w.label.endsWith('…')));
+    assert.ok(weeks.every(w => w.label.length <= 50));
   });
 });
 
@@ -131,8 +162,10 @@ describe('estrategia fases', () => {
 
 describe('generatePlan: invariantes', () => {
   const configs = [
-    algebra(), algebra({ reviewWeek: false }), algebra({ totalUnits: 1 }), algebra({ totalUnits: 40 }),
-    algebra({ startDate: d('2026-10-07'), deadline: d('2026-10-07'), totalUnits: 3 }),
+    algebra(), algebra({ reviewWeek: false }), algebra({ contents: [{ name: 'Unidad', count: 1 }] }),
+    algebra({ contents: [{ name: 'Unidad', count: 40 }] }),
+    algebra({ startDate: d('2026-10-07'), deadline: d('2026-10-07'), contents: [{ name: 'Unidad', count: 3 }] }),
+    algebra({ contents: [{ name: 'Unidad', count: 6 }, { name: 'TP', count: 4 }, { name: 'Parcial', count: 2 }] }),
     running(), running({ sessionsPerWeek: 7 }), running({ sessionsPerWeek: 1 }),
     running({ startDate: d('2026-10-10'), deadline: d('2027-03-02'), type: 'videojuego' })
   ];
@@ -166,11 +199,14 @@ describe('generatePlan: invariantes', () => {
       assert.equal(key(deadlineTasks[0].startDate), key(goal.deadline));
       assert.ok(weeks.at(-1).tasks.includes(deadlineTasks[0]));
 
-      // En divisible, cada unidad aparece exactamente una vez
+      // En divisible, cada contenido de cada tipo aparece exactamente una vez
       if (goal.strategy === 'divisible') {
-        const units = all.filter(t => t.title.startsWith(`${goal.unitName} `)).map(t => t.title);
-        assert.equal(units.length, goal.totalUnits);
-        assert.equal(new Set(units).size, goal.totalUnits);
+        for (const { name, count } of goal.contents) {
+          const titles = all.map(t => t.title).filter(title => new RegExp(`^${name} \\d+$`).test(title));
+          assert.equal(titles.length, count, name);
+          assert.equal(new Set(titles).size, count, name);
+        }
+        assert.ok(weeks.every(w => w.label.length <= 50));
       }
     });
   }

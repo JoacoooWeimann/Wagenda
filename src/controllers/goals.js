@@ -69,7 +69,9 @@ export async function createGoal(req, res) {
   if (fields) return invalid(res, fields);
 
   const userId = currentUserId(req);
-  const { reviewWeek, ...goalData } = goal; // reviewWeek solo influye en la generación
+  // Los parámetros de generación no se guardan: una vez creado, el plan es editable
+  // y la fuente de verdad son sus semanas y tareas
+  const { reviewWeek, contents, sessionsPerWeek, ...goalData } = goal;
 
   // Un único create anidado: Prisma lo ejecuta en una transacción, así que o se
   // guardan el objetivo, sus semanas y sus tareas, o no se guarda nada.

@@ -9,7 +9,7 @@ beforeEach(async () => { await ctx.reset(); });
 
 const algebra = (extra = {}) => ({
   title: 'Álgebra', type: 'academico', strategy: 'divisible',
-  startDate: '2026-10-05', deadline: '2026-11-08', totalUnits: 6, ...extra
+  startDate: '2026-10-05', deadline: '2026-11-08', contents: [{ name: 'Unidad', count: 6 }], ...extra
 });
 const running = (extra = {}) => ({
   title: 'Correr 10 km', type: 'fisico', strategy: 'fases',
@@ -37,9 +37,9 @@ describe('POST /api/goals/preview', () => {
   });
 
   it('responde 400 con errores por campo, incluidos los del plan', async () => {
-    const bad = await ctx.request('POST', '/api/goals/preview', algebra({ totalUnits: 0, type: 'x' }));
+    const bad = await ctx.request('POST', '/api/goals/preview', algebra({ contents: [{ name: 'Unidad', count: 0 }], type: 'x' }));
     assert.equal(bad.status, 400);
-    assert.ok(bad.body.fields.totalUnits && bad.body.fields.type);
+    assert.ok(bad.body.fields.contents && bad.body.fields.type);
 
     // Válido para el validador, pero el algoritmo necesita 4 semanas para "fases"
     const short = await ctx.request('POST', '/api/goals/preview', running({ deadline: '2026-10-20' }));
@@ -62,7 +62,10 @@ describe('POST /api/goals', () => {
     // Cuotas: unidades [2,1,2,1] + repaso 1 = 7 (la fecha límite es un hito y no cuenta)
     assert.deepEqual(goal.progress, { done: 0, total: 7 });
     assert.deepEqual(goal.weeks.map(w => w.target), [2, 1, 2, 1, 1]);
-    assert.equal('reviewWeek' in goal, false);
+    // Los parámetros de generación no se guardan
+    for (const param of ['reviewWeek', 'contents', 'totalUnits', 'unitName', 'sessionsPerWeek']) {
+      assert.equal(param in goal, false, param);
+    }
 
     const october = await monthTasks(2026, 10);
     assert.ok(october.some(t => t.title === 'Unidad 1'));
@@ -332,7 +335,7 @@ describe('propiedad de los objetivos', () => {
     const other = await ctx.prisma.user.create({ data: { name: 'Otro' } });
     const foreign = await ctx.prisma.goal.create({
       data: {
-        title: 'Ajeno', type: 'fisico', strategy: 'fases', sessionsPerWeek: 3,
+        title: 'Ajeno', type: 'fisico', strategy: 'fases',
         startDate: new Date('2026-10-05'), deadline: new Date('2026-11-29'), userId: other.id
       }
     });
