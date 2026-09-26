@@ -3,25 +3,13 @@
 // { data, fields }: `data` trae solo campos permitidos (whitelist) ya limpios,
 // `fields` los errores por campo (vacío si todo es válido).
 import { parseDateOnly } from '../dates.js';
+import { optionalText, requiredText } from './common.js';
+
+export { parseId } from './common.js';
 
 export const PRIORITIES = ['baja', 'normal', 'alta'];
 
 export const LIMITS = { title: 100, description: 1000, category: 30 };
-
-// Texto opcional: trim, vacío -> null
-function optionalText(value, max, field, fields) {
-  if (value === null) return null;
-  if (typeof value !== 'string') {
-    fields[field] = 'Debe ser texto';
-    return undefined;
-  }
-  const text = value.trim();
-  if (text.length > max) {
-    fields[field] = `Máximo ${max} caracteres`;
-    return undefined;
-  }
-  return text || null;
-}
 
 // Valida los campos presentes en `body`. Con `partial` (PATCH) ningún campo es
 // obligatorio; sin él (POST) se exigen title y startDate y se aplican defaults.
@@ -31,10 +19,8 @@ function validateTask(body, { partial }) {
   const has = (key) => body[key] !== undefined;
 
   if (has('title') || !partial) {
-    const title = typeof body.title === 'string' ? body.title.trim() : '';
-    if (!title) fields.title = 'El título es obligatorio';
-    else if (title.length > LIMITS.title) fields.title = `Máximo ${LIMITS.title} caracteres`;
-    else data.title = title;
+    const title = requiredText(body.title, LIMITS.title, 'title', fields, 'El título es obligatorio');
+    if (title !== undefined) data.title = title;
   }
 
   if (has('description')) {
@@ -100,11 +86,6 @@ export function checkDateOrder(start, end, fields) {
   return fields;
 }
 
-// Entero positivo (ids en la URL). Devuelve null si no es válido.
-export function parseId(value) {
-  const id = Number(value);
-  return Number.isInteger(id) && id > 0 ? id : null;
-}
 
 export function validateMonthQuery(query = {}) {
   const year = Number(query.year);

@@ -1,4 +1,7 @@
 import prisma from '../utiles/db.js';
+import { invalid, notFound } from '../utiles/responses.js';
+import { hasErrors } from '../utiles/validation/common.js';
+import { currentUserId } from '../utiles/currentUser.js';
 import { monthRangeUTC } from '../utiles/dates.js';
 import {
   validateTaskCreate,
@@ -8,17 +11,7 @@ import {
   parseId
 } from '../utiles/validation/tasks.js';
 
-const GUEST_USER_ID = 1;
-
-const hasErrors = (fields) => Object.keys(fields).length > 0;
-
-function invalid(res, fields) {
-  return res.status(400).json({ error: 'Datos inválidos', fields });
-}
-
-function notFound(res) {
-  return res.status(404).json({ error: 'Tarea no encontrada' });
-}
+const TASK_NOT_FOUND = 'Tarea no encontrada';
 
 export async function getTasksForMonth(req, res) {
   const { data, fields } = validateMonthQuery(req.query);
@@ -28,7 +21,7 @@ export async function getTasksForMonth(req, res) {
 
   const tasks = await prisma.task.findMany({
     where: {
-      userId: GUEST_USER_ID,
+      userId: currentUserId(req),
       startDate: { lt: monthEnd },
       endDate: { gte: monthStart }
     },
@@ -43,7 +36,7 @@ export async function createTask(req, res) {
   if (hasErrors(fields)) return invalid(res, fields);
 
   const task = await prisma.task.create({
-    data: { ...data, userId: GUEST_USER_ID }
+    data: { ...data, userId: currentUserId(req) }
   });
 
   res.status(201).json(task);
@@ -58,8 +51,8 @@ export async function updateTask(req, res) {
   if (error) return res.status(400).json({ error });
 
   // Filtrar también por userId: con varios usuarios, nadie puede editar tareas ajenas
-  const current = await prisma.task.findFirst({ where: { id, userId: GUEST_USER_ID } });
-  if (!current) return notFound(res);
+  const current = await prisma.task.findFirst({ where: { id, userId: currentUserId(req) } });
+  if (!current) return notFound(res, TASK_NOT_FOUND);
 
   // Si el PATCH trae una sola fecha, la otra sale de lo guardado
   const start = data.startDate ?? current.startDate;
@@ -76,8 +69,8 @@ export async function deleteTask(req, res) {
   if (!id) return invalid(res, { id: 'id inválido' });
 
   // deleteMany permite filtrar por userId y devuelve cuántas borró (0 = no existe o es ajena)
-  const { count } = await prisma.task.deleteMany({ where: { id, userId: GUEST_USER_ID } });
-  if (count === 0) return notFound(res);
+  const { count } = await prisma.task.deleteMany({ where: { id, userId: currentUserId(req) } });
+  if (count === 0) return notFound(res, TASK_NOT_FOUND);
 
   res.json({ ok: true });
 }
