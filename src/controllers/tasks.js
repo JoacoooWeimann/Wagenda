@@ -2,6 +2,7 @@ import prisma from '../utiles/db.js';
 import { invalid, notFound } from '../utiles/responses.js';
 import { hasErrors } from '../utiles/validation/common.js';
 import { currentUserId } from '../utiles/currentUser.js';
+import { TASK_WITH_GOAL } from '../utiles/queries.js';
 import { monthRangeUTC } from '../utiles/dates.js';
 import {
   validateTaskCreate,
@@ -25,7 +26,8 @@ export async function getTasksForMonth(req, res) {
       startDate: { lt: monthEnd },
       endDate: { gte: monthStart }
     },
-    orderBy: { startDate: 'asc' }
+    orderBy: { startDate: 'asc' },
+    include: TASK_WITH_GOAL
   });
 
   res.json(tasks);
@@ -36,7 +38,8 @@ export async function createTask(req, res) {
   if (hasErrors(fields)) return invalid(res, fields);
 
   const task = await prisma.task.create({
-    data: { ...data, userId: currentUserId(req) }
+    data: { ...data, userId: currentUserId(req) },
+    include: TASK_WITH_GOAL
   });
 
   res.status(201).json(task);
@@ -60,7 +63,7 @@ export async function updateTask(req, res) {
   const dateErrors = checkDateOrder(start, end, {});
   if (hasErrors(dateErrors)) return invalid(res, dateErrors);
 
-  const task = await prisma.task.update({ where: { id }, data });
+  const task = await prisma.task.update({ where: { id }, data, include: TASK_WITH_GOAL });
   res.json(task);
 }
 

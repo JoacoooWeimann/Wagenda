@@ -6,6 +6,7 @@ import { currentUserId } from '../utiles/currentUser.js';
 import { generatePlan, PlanError } from '../utiles/planning/index.js';
 import { TYPE_LABELS } from '../utiles/planning/templates.js';
 import { parseDateOnly } from '../utiles/dates.js';
+import { TASK_WITH_GOAL } from '../utiles/queries.js';
 
 const GOAL_NOT_FOUND = 'Objetivo no encontrado';
 
@@ -158,7 +159,8 @@ export async function logSession(req, res) {
       category: TYPE_LABELS[goal.type],
       userId,
       goalWeekId: week.id
-    }
+    },
+    include: TASK_WITH_GOAL
   });
   res.status(201).json(session);
 }

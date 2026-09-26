@@ -125,6 +125,17 @@ describe('páginas', () => {
   });
 });
 
+describe('/calendar con mes en la URL', () => {
+  it('abre el mes pedido y, si es inválido, el actual', async () => {
+    const res = await ctx.request('GET', '/calendar?year=2027&month=3');
+    assert.match(res.body, /data-year="2027" data-month="3"/);
+
+    const now = new Date();
+    const bad = await ctx.request('GET', '/calendar?year=2027&month=13');
+    assert.match(bad.body, new RegExp(`data-year="${now.getFullYear()}" data-month="${now.getMonth() + 1}"`));
+  });
+});
+
 describe('errores generales', () => {
   it('JSON mal formado -> 400 en JSON', async () => {
     const res = await ctx.request('POST', '/api/tasks', '{"title":', { raw: true });

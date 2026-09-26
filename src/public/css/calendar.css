@@ -374,3 +374,47 @@
     height: 48px;
   }
 }
+
+/* Integración con objetivos */
+.calendar-task-goal {
+  align-self: flex-start;
+  font-size: 0.75rem;
+  color: #2563eb;
+  background: #eaf2ff;
+  padding: 1px 6px;
+  border-radius: 999px;
+  text-decoration: none;
+  margin-top: 2px;
+}
+
+.calendar-task-goal:hover { background: #dbe8ff; }
+
+.calendar-session {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+}
+
+.calendar-session select {
+  padding: 4px 6px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  max-width: 100%;
+}
+
+.calendar-session button {
+  margin-left: auto;
+  background: #16a34a;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   suggestedStrategy, typeLabel, todayKey, dayMonth, daysBetweenKeys,
   goalStatus, deadlineText, progressFromWeeks, percent, buildGoalPayload,
-  withWeekDone, weekSummary, paceOf, countNoun
+  withWeekDone, weekSummary, paceOf, countNoun, calendarLink
 } from '../../src/client/utiles/goals.js';
 
 const iso = (k) => `${k}T00:00:00.000Z`;
@@ -108,5 +108,12 @@ describe('helpers de objetivos (cliente)', () => {
     assert.equal('totalUnits' in fases, false);
 
     assert.equal(buildGoalPayload({ ...form, totalUnits: '' }).totalUnits, undefined);
+  });
+
+  it('calendarLink apunta al mes más útil', () => {
+    assert.equal(calendarLink(goal, '2026-09-20'), '/calendar?year=2026&month=10'); // por empezar
+    assert.equal(calendarLink(goal, '2026-10-14'), '/calendar?year=2026&month=10'); // en curso
+    assert.equal(calendarLink({ ...goal, deadline: iso('2026-11-20') }, '2026-11-02'), '/calendar?year=2026&month=11');
+    assert.equal(calendarLink(goal, '2027-01-03'), '/calendar?year=2026&month=10'); // terminado
   });
 });

@@ -309,3 +309,4 @@
 @media (max-width: 480px) {
   .goal-week-summary { margin-left: 0; width: 100%; }
 }
+a.goal-btn { text-decoration: none; display: inline-block; }

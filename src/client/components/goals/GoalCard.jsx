@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { getGoal, updateTask, deleteTask, logSession } from '../../utiles/api.js';
 import {
   typeLabel, goalStatus, deadlineText, dayMonth, withWeekDone, progressFromWeeks,
-  paceOf, percent, countNoun
+  paceOf, percent, countNoun, calendarLink
 } from '../../utiles/goals.js';
 import PlanWeeks from './PlanWeeks.jsx';
 
@@ -122,6 +122,7 @@ export default function GoalCard({ goal, today, onDelete, onError }) {
         <button type="button" className="goal-btn" onClick={toggleOpen} aria-expanded={open}>
           {open ? 'Ocultar plan ▴' : 'Ver plan ▾'}
         </button>
+        <a className="goal-btn" href={calendarLink(goal, today)}>Ver en calendario</a>
         {confirmingDelete ? (
           <span className="goal-confirm">
             ¿Borrar el objetivo y sus tareas?

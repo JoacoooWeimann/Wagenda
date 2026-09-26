@@ -72,6 +72,19 @@ describe('POST /api/goals', () => {
     assert.equal(deadline.category, 'Académico');
   });
 
+  it('las tareas del calendario traen su objetivo y semana (también al editarlas)', async () => {
+    const goal = await createGoal(algebra());
+    const october = await monthTasks(2026, 10);
+    const unit = october.find(t => t.title === 'Unidad 1');
+    assert.deepEqual(unit.goalWeek, { number: 1, goal: { id: goal.id, title: 'Álgebra', strategy: 'divisible' } });
+
+    const patched = await ctx.request('PATCH', `/api/tasks/${unit.id}`, { done: true });
+    assert.equal(patched.body.goalWeek.goal.title, 'Álgebra');
+
+    const loose = await ctx.request('POST', '/api/tasks', { title: 'Suelta', startDate: '2026-10-06' });
+    assert.equal(loose.body.goalWeek, null);
+  });
+
   it('las tareas generadas se editan como cualquier otra y el progreso se actualiza', async () => {
     const goal = await createGoal(algebra());
     const task = goal.weeks[0].tasks[0];

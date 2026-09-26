@@ -127,3 +127,11 @@ export function buildGoalPayload(form) {
   }
   return payload;
 }
+
+// Link al calendario en el mes más útil: el actual si el objetivo está en curso,
+// el de inicio si todavía no empezó, el de la fecha límite si ya terminó
+export function calendarLink(goal, today) {
+  const { kind } = goalStatus(goal, today);
+  const key = kind === 'upcoming' ? goal.startDate : kind === 'finished' ? goal.deadline : today;
+  return `/calendar?year=${Number(key.slice(0, 4))}&month=${Number(key.slice(5, 7))}`;
+}
