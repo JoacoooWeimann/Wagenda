@@ -162,18 +162,59 @@
   cursor: pointer;
 }
 
+.calendar-task-priority-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.calendar-modal {
+  overflow: hidden; /* evita que el contenido "se escape" visualmente del borde redondeado */
+}
+
 .calendar-task-form {
   display: flex;
-  gap: 8px;
+  flex-direction: column;  /* 👈 el cambio clave: columna, no fila */
+  gap: 10px;
   margin-bottom: 16px;
 }
 
-.calendar-task-form input {
-  flex: 1;
+.calendar-task-form input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
   padding: 8px 10px;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   font-size: 0.9rem;
+}
+
+.calendar-task-form-row {
+  display: flex;
+  gap: 8px;
+}
+
+.calendar-task-form-row label {
+  flex: 1;
+  font-size: 0.8rem;
+  color: #666;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.calendar-task-form-row select,
+.calendar-task-form-row input[type="date"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.calendar-task-form-row input[type="text"] {
+  flex: 1;
+  min-width: 0;
 }
 
 .calendar-task-form button {
@@ -181,6 +222,7 @@
   color: white;
   border: none;
   border-radius: 8px;
-  padding: 8px 14px;
+  padding: 10px 14px;
   cursor: pointer;
+  font-size: 0.9rem;
 }
