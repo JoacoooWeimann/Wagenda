@@ -27,3 +27,16 @@ export function monthRangeUTC(year, month) {
     end: new Date(Date.UTC(year, month, 1))
   };
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Suma días a una fecha UTC. Con fechas a medianoche UTC no hay horario de
+// verano que corra el resultado (UTC no tiene).
+export function addDays(date, days) {
+  return new Date(date.getTime() + days * DAY_MS);
+}
+
+// Días entre dos fechas UTC a medianoche (b - a)
+export function daysBetween(a, b) {
+  return Math.round((b.getTime() - a.getTime()) / DAY_MS);
+}
