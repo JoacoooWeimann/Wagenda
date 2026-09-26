@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Priority {
+  baja
+  normal
+  alta
+}
+
 model User {
   id    Int    @id @default(autoincrement())
   name  String @default("Invitado")
@@ -20,7 +26,7 @@ model Task {
   startDate   DateTime
   endDate     DateTime
   done        Boolean  @default(false)
-  priority    String   @default("normal") // "baja" | "normal" | "alta"
+  priority    Priority @default(normal)
   category    String?
   createdAt   DateTime @default(now())
 

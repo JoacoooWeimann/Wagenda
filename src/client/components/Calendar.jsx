@@ -158,7 +158,7 @@ export default function Calendar({ initialYear, initialMonth }) {
 
             <div className="calendar-task-form">
               <input
-                type="text" placeholder="Título"
+                type="text" placeholder="Título" maxLength={100}
                 value={form.title}
                 onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))}
               />
@@ -171,7 +171,7 @@ export default function Calendar({ initialYear, initialMonth }) {
                   {PRIORIDADES.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
                 <input
-                  type="text" placeholder="Categoría (opcional)"
+                  type="text" placeholder="Categoría (opcional)" maxLength={30}
                   value={form.category}
                   onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))}
                 />
