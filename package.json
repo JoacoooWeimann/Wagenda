@@ -12,7 +12,9 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset",
-    "setup": "prisma generate && prisma migrate deploy && prisma db seed && vite build"
+    "setup": "prisma generate && prisma migrate deploy && prisma db seed && vite build",
+    "test": "node --test \"test/**/*.test.js\"",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"src/**\" \"test/**/*.test.js\""
   },
   "nodemonConfig": {
     "ignore": [

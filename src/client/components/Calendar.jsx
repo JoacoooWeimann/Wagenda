@@ -1,41 +1,11 @@
 import { useState, useEffect } from 'react';
 import { buildCalendar, toDateKey, MESES, DIAS_SEMANA } from '../utiles/calendar.js';
 import { getTasks, createTask, updateTask, deleteTask } from '../utiles/api.js';
+import { dayInRange, highestPriority, sortForDay, isMultiDay, shortDate } from '../utiles/tasks.js';
 
 const PRIORIDADES = ['baja', 'normal', 'alta'];
 const ETIQUETA_PRIORIDAD = { baja: 'Baja', normal: 'Normal', alta: 'Alta' };
 const COLOR_PRIORIDAD = { alta: '#ef4444', normal: '#2563eb', baja: '#9ca3af' };
-const ORDEN_PRIORIDAD = { alta: 0, normal: 1, baja: 2 };
-
-// Las fechas llegan como medianoche UTC ("2026-09-09T00:00:00.000Z"): nos quedamos
-// con la parte "YYYY-MM-DD" y comparamos strings. Con ceros a la izquierda, el orden
-// alfabético coincide con el cronológico, y no interviene la zona horaria local.
-function dayInRange(year, month, day, task) {
-  const key = toDateKey(year, month, day);
-  return key >= task.startDate.slice(0, 10) && key <= task.endDate.slice(0, 10);
-}
-
-function highestPriority(tasks) {
-  if (tasks.some(t => t.priority === 'alta')) return 'alta';
-  if (tasks.some(t => t.priority === 'normal')) return 'normal';
-  if (tasks.length > 0) return 'baja';
-  return null;
-}
-
-// Pendientes primero y, dentro de cada grupo, de mayor a menor prioridad.
-// sort es estable: los empates conservan el orden por startDate que manda el servidor.
-function sortForDay(tasks) {
-  return [...tasks].sort((a, b) =>
-    (a.done - b.done) || (ORDEN_PRIORIDAD[a.priority] - ORDEN_PRIORIDAD[b.priority])
-  );
-}
-
-const isMultiDay = (task) => task.startDate.slice(0, 10) !== task.endDate.slice(0, 10);
-
-// "2026-09-09T00:00:00.000Z" -> "9/9"
-function shortDate(iso) {
-  return `${Number(iso.slice(8, 10))}/${Number(iso.slice(5, 7))}`;
-}
 
 const emptyForm = { title: '', description: '', startDate: '', endDate: '', priority: 'normal', category: '' };
 
