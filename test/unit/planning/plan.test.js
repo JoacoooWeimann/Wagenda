@@ -1,0 +1,231 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { generatePlan, PlanError, MAX_WEEKS } from '../../../src/utiles/planning/index.js';
+import { pluralize, reviewWeekCount } from '../../../src/utiles/planning/strategies.js';
+import { PHASE_TEMPLATES, DEFAULT_STRATEGY, TYPE_LABELS } from '../../../src/utiles/planning/templates.js';
+import { parseDateOnly, daysBetween } from '../../../src/utiles/dates.js';
+
+const d = parseDateOnly;
+const key = (date) => date.toISOString().slice(0, 10);
+const weekday = (date) => ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'][date.getUTCDay()];
+
+const algebra = (extra = {}) => ({
+  title: 'Álgebra', type: 'academico', strategy: 'divisible',
+  startDate: d('2026-10-05'), deadline: d('2026-11-08'), // 5 semanas completas
+  contents: [{ name: 'Unidad', count: 6 }], reviewWeek: true, ...extra
+});
+
+const running = (extra = {}) => ({
+  title: 'Correr 10 km', type: 'fisico', strategy: 'fases',
+  startDate: d('2026-10-05'), deadline: d('2026-11-29'), // 8 semanas completas
+  sessionsPerWeek: 3, ...extra
+});
+
+// Tareas del plan que no son la marca de fecha límite
+const workTasks = (week) => week.tasks.filter(t => t.kind !== 'hito');
+
+describe('estrategia divisible', () => {
+  it('con repaso: 6 unidades en 4 semanas + semana de repaso', () => {
+    const { weeks } = generatePlan(algebra());
+    assert.deepEqual(weeks.map(w => w.label),
+      ['Unidades 1–2', 'Unidad 3', 'Unidades 4–5', 'Unidad 6', 'Repaso']);
+    assert.deepEqual(workTasks(weeks[4]).map(t => t.title), ['Repaso general']);
+  });
+
+  it('sin repaso: el reparto usa las 5 semanas', () => {
+    const { weeks } = generatePlan(algebra({ reviewWeek: false }));
+    assert.deepEqual(weeks.map(w => workTasks(w).length), [1, 1, 2, 1, 1]);
+  });
+
+  it('cada unidad es una tarea que ocupa toda su semana, en orden', () => {
+    const { weeks } = generatePlan(algebra());
+    const units = weeks.slice(0, -1).flatMap(w => w.tasks.map(t => ({ t, w })));
+    assert.deepEqual(units.map(({ t }) => t.title), [1, 2, 3, 4, 5, 6].map(n => `Unidad ${n}`));
+    for (const { t, w } of units) {
+      assert.equal(key(t.startDate), key(w.startDate));
+      assert.equal(key(t.endDate), key(w.endDate));
+    }
+  });
+
+  it('con menos de 3 semanas no reserva repaso', () => {
+    const { weeks } = generatePlan(algebra({ deadline: d('2026-10-18'), contents: [{ name: 'Unidad', count: 2 }] }));
+    assert.deepEqual(weeks.map(w => w.label), ['Unidad 1', 'Unidad 2']);
+  });
+
+  it('si la última semana es corta, el repaso ocupa las dos últimas', () => {
+    // mié 7/10 a mar 10/11: la primera semana tiene 5 días y la última 2
+    const { weeks } = generatePlan(algebra({ startDate: d('2026-10-07'), deadline: d('2026-11-10') }));
+    // pesos [5,7,7,7]: la primera semana, parcial, recibe menos
+    assert.deepEqual(weeks.map(w => w.label),
+      ['Unidad 1', 'Unidades 2–3', 'Unidad 4', 'Unidades 5–6', 'Repaso', 'Repaso']);
+    assert.deepEqual(weeks.slice(-2).map(w => workTasks(w)[0].title),
+      ['Repaso general · parte 1/2', 'Repaso general · parte 2/2']);
+    const reviewDays = daysBetween(weeks.at(-2).startDate, weeks.at(-1).endDate) + 1;
+    assert.equal(reviewDays, 9);
+  });
+
+  it('reviewWeekCount: el repaso tiene al menos 4 días si hay semanas de sobra', () => {
+    const w = (...days) => days.map(n => ({ days: n }));
+    assert.equal(reviewWeekCount(w(7, 7, 7), false), 0);
+    assert.equal(reviewWeekCount(w(7, 7), true), 0);          // menos de 3 semanas
+    assert.equal(reviewWeekCount(w(7, 7, 7, 4), true), 1);    // última de 4 días: alcanza
+    assert.equal(reviewWeekCount(w(7, 7, 7, 3), true), 2);    // última corta: 2 semanas
+    assert.equal(reviewWeekCount(w(7, 7, 3), true), 1);       // no quedarían 2 de contenido
+  });
+
+  it('las semanas sin unidades nuevas llevan una tarea de refuerzo', () => {
+    const { weeks } = generatePlan(algebra({ contents: [{ name: 'Unidad', count: 2 }], reviewWeek: false }));
+    // 2 unidades en 5 semanas -> [0,1,0,1,0]
+    assert.deepEqual(weeks.map(w => w.label), ['Preparación', 'Unidad 1', 'Refuerzo', 'Unidad 2', 'Refuerzo']);
+    assert.ok(weeks.every(w => w.tasks.length >= 1));
+  });
+
+  it('usa el nombre de unidad en singular y plural', () => {
+    assert.equal(pluralize('Unidad'), 'Unidades');
+    assert.equal(pluralize('Capítulo'), 'Capítulos');
+    assert.equal(pluralize('Nivel'), 'Niveles');
+    assert.equal(pluralize('Lección'), 'Lecciones');
+    const { weeks } = generatePlan(algebra({ contents: [{ name: 'Capítulo', count: 6 }] }));
+    assert.equal(weeks[0].label, 'Capítulos 1–2');
+  });
+});
+
+describe('varios tipos de contenido', () => {
+  const mixed = () => algebra({
+    contents: [{ name: 'Unidad', count: 6 }, { name: 'TP', count: 4 }, { name: 'Parcial', count: 2 }]
+  });
+
+  it('cada tipo se reparte por separado y se mezclan en cada semana', () => {
+    const { weeks } = generatePlan(mixed());
+    assert.deepEqual(weeks.map(w => w.label), [
+      'Unidades 1–2 · TP 1 · Parcial 1',
+      'Unidad 3 · TP 2',
+      'Unidades 4–5 · TP 3 · Parcial 2',
+      'Unidad 6 · TP 4',
+      'Repaso'
+    ]);
+    assert.deepEqual(workTasks(weeks[1]).map(t => t.title), ['Unidad 3', 'TP 2']);
+    assert.deepEqual(weeks.map(w => w.target), [4, 2, 4, 2, 1]);
+  });
+
+  it('las etiquetas largas se cortan a 50 caracteres', () => {
+    const { weeks } = generatePlan(algebra({
+      contents: [
+        { name: 'Trabajo práctico integrador', count: 8 },
+        { name: 'Ejercitación adicional', count: 8 }
+      ],
+      reviewWeek: false
+    }));
+    assert.ok(weeks.some(w => w.label.endsWith('…')));
+    assert.ok(weeks.every(w => w.label.length <= 50));
+  });
+});
+
+describe('estrategia fases', () => {
+  it('8 semanas: apertura y cierre de 1 semana, el medio repartido', () => {
+    const { weeks } = generatePlan(running());
+    assert.deepEqual(weeks.map(w => w.label), [
+      'Diagnóstico', 'Consistencia', 'Consistencia', 'Consistencia',
+      'Intensidad', 'Intensidad', 'Intensidad', 'Evaluación'
+    ]);
+  });
+
+  it('cada semana tiene una cuota de sesiones y no hay sesiones pre-fechadas', () => {
+    const { weeks } = generatePlan(running());
+    assert.ok(weeks.every(w => w.target === 3));
+    assert.ok(weeks.every(w => workTasks(w).length === 0));
+  });
+
+  it('las semanas parciales tienen una cuota proporcional (al menos 1)', () => {
+    // sábado 10/10 a jueves 5/11: primera semana de 2 días, última de 4
+    const { weeks } = generatePlan(running({ startDate: d('2026-10-10'), deadline: d('2026-11-05') }));
+    assert.equal(weeks[0].target, 1);
+    assert.equal(weeks.at(-1).target, 2);
+    assert.equal(weeks[1].target, 3);
+  });
+
+  it('con menos de 4 semanas lanza PlanError sobre deadline', () => {
+    assert.throws(
+      () => generatePlan(running({ deadline: d('2026-10-25') })),
+      (err) => err instanceof PlanError && err.field === 'deadline'
+    );
+  });
+
+  it('funciona para todos los tipos', () => {
+    for (const type of Object.keys(TYPE_LABELS)) {
+      const { weeks } = generatePlan(running({ type }));
+      assert.equal(weeks[0].label, PHASE_TEMPLATES[type][0].name);
+      assert.equal(weeks.at(-1).label, PHASE_TEMPLATES[type][3].name);
+    }
+  });
+});
+
+describe('generatePlan: invariantes', () => {
+  const configs = [
+    algebra(), algebra({ reviewWeek: false }), algebra({ contents: [{ name: 'Unidad', count: 1 }] }),
+    algebra({ contents: [{ name: 'Unidad', count: 40 }] }),
+    algebra({ startDate: d('2026-10-07'), deadline: d('2026-10-07'), contents: [{ name: 'Unidad', count: 3 }] }),
+    algebra({ contents: [{ name: 'Unidad', count: 6 }, { name: 'TP', count: 4 }, { name: 'Parcial', count: 2 }] }),
+    running(), running({ sessionsPerWeek: 7 }), running({ sessionsPerWeek: 1 }),
+    running({ startDate: d('2026-10-10'), deadline: d('2027-03-02'), type: 'videojuego' })
+  ];
+
+  for (const goal of configs) {
+    it(`${goal.strategy} ${key(goal.startDate)}→${key(goal.deadline)}`, () => {
+      const { weeks } = generatePlan(goal);
+      const all = weeks.flatMap(w => w.tasks);
+
+      // Todas las tareas caen dentro de su semana (y por lo tanto dentro del plazo)
+      for (const w of weeks) {
+        for (const t of w.tasks) {
+          assert.ok(t.startDate >= w.startDate && t.endDate <= w.endDate, t.title);
+          assert.ok(t.startDate <= t.endDate, t.title);
+          assert.ok(t.title.length <= 100);
+          assert.equal(t.category, TYPE_LABELS[goal.type]);
+        }
+      }
+
+      // Exactamente una marca de fecha límite (hito), en la última semana, prioridad alta
+      const deadlineTasks = all.filter(t => t.kind === 'hito');
+      assert.equal(deadlineTasks.length, 1);
+      assert.ok(deadlineTasks[0].title.startsWith('Fecha límite'));
+      assert.equal(deadlineTasks[0].priority, 'alta');
+
+      // Toda semana tiene cuota; en divisible es la cantidad de tareas de la semana
+      for (const w of weeks) {
+        assert.ok(Number.isInteger(w.target) && w.target >= 1);
+        if (goal.strategy === 'divisible') assert.equal(w.target, workTasks(w).length);
+      }
+      assert.equal(key(deadlineTasks[0].startDate), key(goal.deadline));
+      assert.ok(weeks.at(-1).tasks.includes(deadlineTasks[0]));
+
+      // En divisible, cada contenido de cada tipo aparece exactamente una vez
+      if (goal.strategy === 'divisible') {
+        for (const { name, count } of goal.contents) {
+          const titles = all.map(t => t.title).filter(title => new RegExp(`^${name} \\d+$`).test(title));
+          assert.equal(titles.length, count, name);
+          assert.equal(new Set(titles).size, count, name);
+        }
+        assert.ok(weeks.every(w => w.label.length <= 50));
+      }
+    });
+  }
+
+  it(`rechaza plazos de más de ${MAX_WEEKS} semanas`, () => {
+    assert.throws(() => generatePlan(algebra({ deadline: d('2028-01-01') })), PlanError);
+  });
+
+  it('un título largo no genera tareas de más de 100 caracteres', () => {
+    const { weeks } = generatePlan(algebra({ title: 'x'.repeat(100) }));
+    assert.ok(weeks.flatMap(w => w.tasks).every(t => t.title.length <= 100));
+  });
+});
+
+describe('plantillas', () => {
+  it('cada tipo tiene 4 fases y una estrategia sugerida', () => {
+    for (const type of Object.keys(TYPE_LABELS)) {
+      assert.equal(PHASE_TEMPLATES[type].length, 4, type);
+      assert.ok(['divisible', 'fases'].includes(DEFAULT_STRATEGY[type]), type);
+    }
+  });
+});
