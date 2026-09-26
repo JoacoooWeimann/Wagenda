@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
-import { buildCalendar, MESES, DIAS_SEMANA } from '../utiles/calendar.js';
+import { buildCalendar, toDateKey, MESES, DIAS_SEMANA } from '../utiles/calendar.js';
 
 const PRIORIDADES = ['baja', 'normal', 'alta'];
 const COLOR_PRIORIDAD = { alta: '#ef4444', normal: '#2563eb', baja: '#9ca3af' };
 
+// Las fechas llegan como medianoche UTC ("2026-09-09T00:00:00.000Z"): nos quedamos
+// con la parte "YYYY-MM-DD" y comparamos strings. Con ceros a la izquierda, el orden
+// alfabético coincide con el cronológico, y no interviene la zona horaria local.
 function dayInRange(year, month, day, task) {
-  const d = new Date(year, month - 1, day);
-  d.setHours(0, 0, 0, 0);
-  const start = new Date(task.startDate);
-  const end = new Date(task.endDate);
-  return d >= start && d <= end;
+  const key = toDateKey(year, month, day);
+  return key >= task.startDate.slice(0, 10) && key <= task.endDate.slice(0, 10);
 }
 
 function highestPriority(tasks) {
@@ -46,7 +46,7 @@ export default function Calendar({ initialYear, initialMonth }) {
 
   function openDay(day) {
     setSelectedDay(day);
-    const iso = new Date(year, month - 1, day).toISOString().slice(0, 10);
+    const iso = toDateKey(year, month, day);
     setForm({ ...emptyForm, startDate: iso, endDate: iso });
     setEditingId(null);
   }

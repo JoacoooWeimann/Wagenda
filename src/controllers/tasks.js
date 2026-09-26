@@ -1,17 +1,11 @@
 import prisma from '../utiles/db.js';
+import { parseDateOnly, monthRangeUTC } from '../utiles/dates.js';
 
 const GUEST_USER_ID = 1;
 
-function startOfDay(date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 export async function getTasksForMonth(req, res) {
   const { year, month } = req.query;
-  const monthStart = new Date(Number(year), Number(month) - 1, 1);
-  const monthEnd = new Date(Number(year), Number(month), 1);
+  const { start: monthStart, end: monthEnd } = monthRangeUTC(Number(year), Number(month));
 
   const tasks = await prisma.task.findMany({
     where: {
@@ -32,9 +26,12 @@ export async function createTask(req, res) {
     return res.status(400).json({ error: 'title y startDate son obligatorios' });
   }
 
-  const start = startOfDay(startDate);
-  const end = endDate ? startOfDay(endDate) : start;
+  const start = parseDateOnly(startDate);
+  const end = endDate ? parseDateOnly(endDate) : start;
 
+  if (!start || !end) {
+    return res.status(400).json({ error: 'Las fechas deben tener formato YYYY-MM-DD' });
+  }
   if (end < start) {
     return res.status(400).json({ error: 'endDate no puede ser anterior a startDate' });
   }
@@ -64,8 +61,12 @@ export async function updateTask(req, res) {
   if (priority !== undefined) data.priority = priority;
   if (category !== undefined) data.category = category;
   if (done !== undefined) data.done = done;
-  if (startDate !== undefined) data.startDate = startOfDay(startDate);
-  if (endDate !== undefined) data.endDate = startOfDay(endDate);
+  if (startDate !== undefined) data.startDate = parseDateOnly(startDate);
+  if (endDate !== undefined) data.endDate = parseDateOnly(endDate);
+
+  if (data.startDate === null || data.endDate === null) {
+    return res.status(400).json({ error: 'Las fechas deben tener formato YYYY-MM-DD' });
+  }
 
   const task = await prisma.task.update({ where: { id }, data });
   res.json(task);

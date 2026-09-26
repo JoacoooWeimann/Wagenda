@@ -1,4 +1,4 @@
-// src/utiles/calendar.js
+// src/client/utiles/calendar.js
 export const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
@@ -29,4 +29,9 @@ export function buildCalendar(year, month) {
   }
 
   return { weeks };
+}
+// Clave "YYYY-MM-DD" de un día del calendario. Se arma a mano (sin toISOString)
+// para no pasar por UTC: en zonas UTC+ eso devolvería el día anterior.
+export function toDateKey(year, month, day) {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
