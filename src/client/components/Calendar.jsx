@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { buildCalendar, toDateKey, MESES, DIAS_SEMANA } from '../utiles/calendar.js';
+import { getTasks, createTask, updateTask, deleteTask } from '../utiles/api.js';
 
 const PRIORIDADES = ['baja', 'normal', 'alta'];
 const COLOR_PRIORIDAD = { alta: '#ef4444', normal: '#2563eb', baja: '#9ca3af' };
@@ -21,6 +22,20 @@ function highestPriority(tasks) {
 
 const emptyForm = { title: '', description: '', startDate: '', endDate: '', priority: 'normal', category: '' };
 
+function FieldError({ message }) {
+  return message ? <span className="calendar-field-error">{message}</span> : null;
+}
+
+function ErrorBanner({ message, onClose }) {
+  if (!message) return null;
+  return (
+    <div className="calendar-error" role="alert">
+      <span>⚠ {message}</span>
+      <button onClick={onClose} aria-label="Cerrar aviso">✕</button>
+    </div>
+  );
+}
+
 export default function Calendar({ initialYear, initialMonth }) {
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth);
@@ -28,13 +43,20 @@ export default function Calendar({ initialYear, initialMonth }) {
   const [tasks, setTasks] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
+  const [error, setError] = useState(null);           // mensaje general (aviso)
+  const [fieldErrors, setFieldErrors] = useState({}); // errores por campo del formulario
+  const [saving, setSaving] = useState(false);
 
   const { weeks } = buildCalendar(year, month);
 
   useEffect(() => {
-    fetch(`/api/tasks?year=${year}&month=${month}`)
-      .then(r => r.json())
-      .then(setTasks);
+    // Si el usuario cambia de mes rápido, una respuesta vieja podría llegar
+    // después de la nueva y pisarla: `ignore` descarta las respuestas obsoletas.
+    let ignore = false;
+    getTasks(year, month)
+      .then(data => { if (!ignore) { setTasks(data); setError(null); } })
+      .catch(err => { if (!ignore) setError(`No se pudieron cargar las tareas: ${err.message}`); });
+    return () => { ignore = true; };
   }, [year, month]);
 
   function goPrev() { month === 1 ? (setMonth(12), setYear(y => y - 1)) : setMonth(m => m - 1); }
@@ -44,15 +66,33 @@ export default function Calendar({ initialYear, initialMonth }) {
     return tasks.filter(t => dayInRange(year, month, day, t));
   }
 
+  // Al editar un campo se borra su error, para no dejar un mensaje viejo en rojo
+  function updateField(name, value) {
+    setForm(f => ({ ...f, [name]: value }));
+    setFieldErrors(({ [name]: _, ...rest }) => rest);
+  }
+
+  function resetForm(date) {
+    setEditingId(null);
+    setForm({ ...emptyForm, startDate: date, endDate: date });
+    setFieldErrors({});
+  }
+
   function openDay(day) {
     setSelectedDay(day);
-    const iso = toDateKey(year, month, day);
-    setForm({ ...emptyForm, startDate: iso, endDate: iso });
-    setEditingId(null);
+    setError(null);
+    resetForm(toDateKey(year, month, day));
+  }
+
+  function closeModal() {
+    setSelectedDay(null);
+    setError(null);
+    setFieldErrors({});
   }
 
   function startEdit(task) {
     setEditingId(task.id);
+    setFieldErrors({});
     setForm({
       title: task.title,
       description: task.description || '',
@@ -64,50 +104,58 @@ export default function Calendar({ initialYear, initialMonth }) {
   }
 
   async function saveTask() {
-    if (!form.title.trim() || !form.startDate) return;
-
-    const payload = { ...form, endDate: form.endDate || form.startDate };
-
-    if (editingId) {
-      const res = await fetch(`/api/tasks/${editingId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const updated = await res.json();
-      setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
-    } else {
-      const res = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const created = await res.json();
-      setTasks(prev => [...prev, created]);
+    // Chequeo local solo para no hacer un pedido inútil; la validación real es del servidor
+    if (!form.title.trim()) {
+      setFieldErrors({ title: 'El título es obligatorio' });
+      return;
     }
 
-    setEditingId(null);
-    setForm({ ...emptyForm, startDate: form.startDate, endDate: form.startDate });
+    const payload = { ...form, endDate: form.endDate || form.startDate };
+    setSaving(true);
+    setError(null);
+
+    // Pesimista: la lista cambia recién cuando el servidor confirma
+    try {
+      if (editingId) {
+        const updated = await updateTask(editingId, payload);
+        setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
+      } else {
+        const created = await createTask(payload);
+        setTasks(prev => [...prev, created]);
+      }
+      resetForm(form.startDate);
+    } catch (err) {
+      const hasFieldErrors = Object.keys(err.fields || {}).length > 0;
+      setFieldErrors(err.fields || {});
+      setError(hasFieldErrors ? 'No se pudo guardar la tarea' : err.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function toggleDone(task) {
-    const res = await fetch(`/api/tasks/${task.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ done: !task.done })
-    });
-    const updated = await res.json();
-    setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
+    try {
+      const updated = await updateTask(task.id, { done: !task.done });
+      setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
+    } catch (err) {
+      setError(`No se pudo actualizar la tarea: ${err.message}`);
+    }
   }
 
   async function removeTask(id) {
-    await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
-    setTasks(prev => prev.filter(t => t.id !== id));
-    if (editingId === id) { setEditingId(null); setForm(emptyForm); }
+    try {
+      await deleteTask(id);
+      setTasks(prev => prev.filter(t => t.id !== id));
+      if (editingId === id) resetForm(form.startDate);
+    } catch (err) {
+      setError(`No se pudo borrar la tarea: ${err.message}`);
+    }
   }
 
   return (
     <div className="calendar-container">
+      {!selectedDay && <ErrorBanner message={error} onClose={() => setError(null)} />}
+
       <div className="calendar-header">
         <button onClick={goPrev} className="calendar-nav">&laquo; Anterior</button>
         <h2>{MESES[month - 1]} {year}</h2>
@@ -139,8 +187,10 @@ export default function Calendar({ initialYear, initialMonth }) {
       </table>
 
       {selectedDay && (
-        <div className="calendar-modal-overlay" onClick={() => setSelectedDay(null)}>
+        <div className="calendar-modal-overlay" onClick={closeModal}>
           <div className="calendar-modal" onClick={(e) => e.stopPropagation()}>
+            <ErrorBanner message={error} onClose={() => setError(null)} />
+
             <h3>{selectedDay} de {MESES[month - 1]}, {year}</h3>
 
             <ul className="calendar-task-list">
@@ -157,30 +207,49 @@ export default function Calendar({ initialYear, initialMonth }) {
             </ul>
 
             <div className="calendar-task-form">
-              <input
-                type="text" placeholder="Título" maxLength={100}
-                value={form.title}
-                onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))}
-              />
-              <div className="calendar-task-form-row">
-                <label>Desde <input type="date" value={form.startDate} onChange={(e) => setForm(f => ({ ...f, startDate: e.target.value }))} /></label>
-                <label>Hasta <input type="date" value={form.endDate} onChange={(e) => setForm(f => ({ ...f, endDate: e.target.value }))} /></label>
-              </div>
-              <div className="calendar-task-form-row">
-                <select value={form.priority} onChange={(e) => setForm(f => ({ ...f, priority: e.target.value }))}>
-                  {PRIORIDADES.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
+              <div className="calendar-field">
                 <input
-                  type="text" placeholder="Categoría (opcional)" maxLength={30}
-                  value={form.category}
-                  onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))}
+                  type="text" placeholder="Título" maxLength={100}
+                  className={fieldErrors.title ? 'is-invalid' : ''}
+                  value={form.title}
+                  onChange={(e) => updateField('title', e.target.value)}
                 />
+                <FieldError message={fieldErrors.title} />
               </div>
-              <button onClick={saveTask}>{editingId ? 'Guardar cambios' : 'Agregar'}</button>
-              {editingId && <button onClick={() => { setEditingId(null); setForm({ ...emptyForm, startDate: form.startDate, endDate: form.startDate }); }}>Cancelar edición</button>}
+              <div className="calendar-task-form-row">
+                <label>Desde
+                  <input type="date" className={fieldErrors.startDate ? 'is-invalid' : ''} value={form.startDate} onChange={(e) => updateField('startDate', e.target.value)} />
+                  <FieldError message={fieldErrors.startDate} />
+                </label>
+                <label>Hasta
+                  <input type="date" className={fieldErrors.endDate ? 'is-invalid' : ''} value={form.endDate} onChange={(e) => updateField('endDate', e.target.value)} />
+                  <FieldError message={fieldErrors.endDate} />
+                </label>
+              </div>
+              <div className="calendar-task-form-row">
+                <div className="calendar-field">
+                  <select className={fieldErrors.priority ? 'is-invalid' : ''} value={form.priority} onChange={(e) => updateField('priority', e.target.value)}>
+                    {PRIORIDADES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                  <FieldError message={fieldErrors.priority} />
+                </div>
+                <div className="calendar-field">
+                  <input
+                    type="text" placeholder="Categoría (opcional)" maxLength={30}
+                    className={fieldErrors.category ? 'is-invalid' : ''}
+                    value={form.category}
+                    onChange={(e) => updateField('category', e.target.value)}
+                  />
+                  <FieldError message={fieldErrors.category} />
+                </div>
+              </div>
+              <button onClick={saveTask} disabled={saving}>
+                {saving ? 'Guardando…' : editingId ? 'Guardar cambios' : 'Agregar'}
+              </button>
+              {editingId && <button onClick={() => resetForm(form.startDate)}>Cancelar edición</button>}
             </div>
 
-            <button className="calendar-modal-close" onClick={() => setSelectedDay(null)}>Cerrar</button>
+            <button className="calendar-modal-close" onClick={closeModal}>Cerrar</button>
           </div>
         </div>
       )}

@@ -226,3 +226,46 @@
   cursor: pointer;
   font-size: 0.9rem;
 }
+/* Errores */
+.calendar-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+}
+
+.calendar-error button {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.calendar-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.calendar-field-error {
+  color: #dc2626;
+  font-size: 0.75rem;
+}
+
+.calendar-task-form .is-invalid {
+  border-color: #dc2626 !important;
+}
+
+.calendar-task-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

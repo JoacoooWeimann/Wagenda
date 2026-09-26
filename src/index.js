@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import indexRoutes from './routes/index.js';
 import taskRoutes from './routes/tasks.js';
+import { apiNotFound, errorHandler } from './middlewares/errors.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,6 +17,10 @@ app.use(express.json());
 
 app.use(indexRoutes);
 app.use(taskRoutes);
+
+// Van después de las rutas: Express recorre los middlewares en orden de registro
+app.use('/api', apiNotFound);
+app.use(errorHandler);
 
 const PORT = 3000;
 app.listen(PORT, () => console.log(`Servidor corriendo en http://localhost:${PORT}`));
