@@ -22,12 +22,23 @@ export function pluralize(word) {
   return word + 'es';
 }
 
+export const MIN_REVIEW_DAYS = 4;
+
+// Cuántas semanas finales se reservan para repaso: ninguna si no se pidió o hay
+// menos de 3 semanas; 2 si la última es muy corta (el repaso siempre tiene al
+// menos MIN_REVIEW_DAYS días) y aun así quedan 2 semanas para el contenido; si no, 1.
+export function reviewWeekCount(weeks, reviewWeek) {
+  if (!reviewWeek || weeks.length < 3) return 0;
+  if (weeks.at(-1).days < MIN_REVIEW_DAYS && weeks.length - 2 >= 2) return 2;
+  return 1;
+}
+
 // --- Estrategia "divisible": N unidades repartidas entre las semanas ---------
-// Cada unidad es una tarea que ocupa toda su semana. Con reviewWeek (y al menos
-// 3 semanas), la última semana se reserva para repaso.
+// Cada unidad es una tarea que ocupa toda su semana. Con reviewWeek, las
+// semanas finales se reservan para repaso (ver reviewWeekCount).
 export function planDivisible(weeks, { totalUnits, unitName = 'Unidad', reviewWeek }) {
-  const withReview = reviewWeek && weeks.length >= 3;
-  const contentWeeks = withReview ? weeks.slice(0, -1) : weeks;
+  const reviewCount = reviewWeekCount(weeks, reviewWeek);
+  const contentWeeks = weeks.slice(0, weeks.length - reviewCount);
 
   // La capacidad (días) es el peso: las semanas parciales reciben menos unidades
   const counts = distribute(totalUnits, contentWeeks.map(w => w.days));
@@ -60,14 +71,15 @@ export function planDivisible(weeks, { totalUnits, unitName = 'Unidad', reviewWe
     };
   });
 
-  if (withReview) {
-    const last = weeks.at(-1);
+  // Una tarea por semana de repaso: cada tarea tiene que quedar dentro de su semana
+  weeks.slice(weeks.length - reviewCount).forEach((week, i) => {
+    const title = reviewCount === 1 ? 'Repaso general' : `Repaso general · parte ${i + 1}/${reviewCount}`;
     planned.push({
-      ...last,
+      ...week,
       label: 'Repaso',
-      tasks: [{ startDate: last.startDate, endDate: last.endDate, title: 'Repaso general' }]
+      tasks: [{ startDate: week.startDate, endDate: week.endDate, title }]
     });
-  }
+  });
   return planned;
 }
 

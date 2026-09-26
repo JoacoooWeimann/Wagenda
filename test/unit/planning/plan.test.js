@@ -1,9 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { generatePlan, PlanError, MAX_WEEKS } from '../../../src/utiles/planning/index.js';
-import { pluralize } from '../../../src/utiles/planning/strategies.js';
+import { pluralize, reviewWeekCount } from '../../../src/utiles/planning/strategies.js';
 import { PHASE_TEMPLATES, DEFAULT_STRATEGY, TYPE_LABELS } from '../../../src/utiles/planning/templates.js';
-import { parseDateOnly } from '../../../src/utiles/dates.js';
+import { parseDateOnly, daysBetween } from '../../../src/utiles/dates.js';
 
 const d = parseDateOnly;
 const key = (date) => date.toISOString().slice(0, 10);
@@ -50,6 +50,27 @@ describe('estrategia divisible', () => {
   it('con menos de 3 semanas no reserva repaso', () => {
     const { weeks } = generatePlan(algebra({ deadline: d('2026-10-18'), totalUnits: 2 }));
     assert.deepEqual(weeks.map(w => w.label), ['Unidad 1', 'Unidad 2']);
+  });
+
+  it('si la última semana es corta, el repaso ocupa las dos últimas', () => {
+    // mié 7/10 a mar 10/11: la primera semana tiene 5 días y la última 2
+    const { weeks } = generatePlan(algebra({ startDate: d('2026-10-07'), deadline: d('2026-11-10') }));
+    // pesos [5,7,7,7]: la primera semana, parcial, recibe menos
+    assert.deepEqual(weeks.map(w => w.label),
+      ['Unidad 1', 'Unidades 2–3', 'Unidad 4', 'Unidades 5–6', 'Repaso', 'Repaso']);
+    assert.deepEqual(weeks.slice(-2).map(w => workTasks(w)[0].title),
+      ['Repaso general · parte 1/2', 'Repaso general · parte 2/2']);
+    const reviewDays = daysBetween(weeks.at(-2).startDate, weeks.at(-1).endDate) + 1;
+    assert.equal(reviewDays, 9);
+  });
+
+  it('reviewWeekCount: el repaso tiene al menos 4 días si hay semanas de sobra', () => {
+    const w = (...days) => days.map(n => ({ days: n }));
+    assert.equal(reviewWeekCount(w(7, 7, 7), false), 0);
+    assert.equal(reviewWeekCount(w(7, 7), true), 0);          // menos de 3 semanas
+    assert.equal(reviewWeekCount(w(7, 7, 7, 4), true), 1);    // última de 4 días: alcanza
+    assert.equal(reviewWeekCount(w(7, 7, 7, 3), true), 2);    // última corta: 2 semanas
+    assert.equal(reviewWeekCount(w(7, 7, 3), true), 1);       // no quedarían 2 de contenido
   });
 
   it('las semanas sin unidades nuevas llevan una tarea de refuerzo', () => {
