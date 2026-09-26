@@ -1,20 +1,28 @@
 {
-  "name": "first-proyect-node",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "wagenda",
+  "version": "1.1.0",
+  "description": "Agenda y calendario personal con planificación de objetivos",
   "type": "module",
- 
+  "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "build:client": "vite build",
-    "watch:client": "vite build --watch"
+    "start": "node src/index.js",
+    "build": "vite build",
+    "watch:client": "vite build --watch",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "prisma db seed",
+    "db:reset": "prisma migrate reset",
+    "setup": "prisma generate && prisma migrate deploy && prisma db seed && vite build"
   },
-
+  "nodemonConfig": {
+    "ignore": [
+      "src/client/",
+      "src/public/"
+    ]
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
-
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "ejs": "^6.0.1",
@@ -23,12 +31,11 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
-
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.0",
+    "dotenv": "^16.6.1",
     "nodemon": "^3.1.14",
     "prisma": "^6.19.3",
     "vite": "^8.2.2"
   }
-
 }
