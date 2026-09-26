@@ -13,10 +13,57 @@ enum Priority {
   alta
 }
 
+enum GoalType {
+  academico
+  fisico
+  videojuego
+  profesional
+}
+
+enum PlanStrategy {
+  divisible
+  fases
+}
+
 model User {
   id    Int    @id @default(autoincrement())
   name  String @default("Invitado")
   tasks Task[]
+  goals Goal[]
+}
+
+model Goal {
+  id              Int          @id @default(autoincrement())
+  title           String
+  description     String?
+  type            GoalType
+  strategy        PlanStrategy
+  startDate       DateTime
+  deadline        DateTime
+  totalUnits      Int? // solo "divisible": cuántas unidades hay
+  unitName        String? // solo "divisible": "Unidad", "Capítulo", "Nivel"...
+  sessionsPerWeek Int? // solo "fases": sesiones por semana (1–7)
+  createdAt       DateTime     @default(now())
+
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+  weeks  GoalWeek[]
+
+  @@index([userId])
+}
+
+model GoalWeek {
+  id        Int      @id @default(autoincrement())
+  number    Int // 1, 2, 3...
+  startDate DateTime
+  endDate   DateTime
+  label     String // "Unidades 3–4", "Repaso", "Consistencia"...
+
+  goal   Goal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  goalId Int
+  tasks  Task[]
+
+  @@unique([goalId, number])
 }
 
 model Task {
@@ -33,6 +80,12 @@ model Task {
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId Int
 
+  // Solo las tareas generadas por un objetivo; el objetivo se llega vía la semana.
+  // Cascade: si se borra el objetivo (y con él sus semanas), se borran sus tareas.
+  goalWeek   GoalWeek? @relation(fields: [goalWeekId], references: [id], onDelete: Cascade)
+  goalWeekId Int?
+
+  @@index([goalWeekId])
   // Cubre la consulta del mes (userId = ? AND startDate < ? ORDER BY startDate)
   // y, por empezar con userId, también las búsquedas por la foreign key
   @@index([userId, startDate])
