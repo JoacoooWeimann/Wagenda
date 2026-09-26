@@ -59,7 +59,9 @@ describe('POST /api/goals', () => {
     const goal = await createGoal(algebra());
     assert.equal(goal.weeks.length, 5);
     assert.equal(goal.userId, 1);
-    assert.deepEqual(goal.progress, { done: 0, total: 8 }); // 6 unidades + repaso + fecha límite
+    // Cuotas: unidades [2,1,2,1] + repaso 1 = 7 (la fecha límite es un hito y no cuenta)
+    assert.deepEqual(goal.progress, { done: 0, total: 7 });
+    assert.deepEqual(goal.weeks.map(w => w.target), [2, 1, 2, 1, 1]);
     assert.equal('reviewWeek' in goal, false);
 
     const october = await monthTasks(2026, 10);
@@ -71,13 +73,22 @@ describe('POST /api/goals', () => {
   });
 
   it('las tareas generadas se editan como cualquier otra y el progreso se actualiza', async () => {
-    const goal = await createGoal(running());
+    const goal = await createGoal(algebra());
     const task = goal.weeks[0].tasks[0];
     const patch = await ctx.request('PATCH', `/api/tasks/${task.id}`, { done: true });
     assert.equal(patch.status, 200);
 
     const detail = await ctx.request('GET', `/api/goals/${goal.id}`);
     assert.equal(detail.body.progress.done, 1);
+    assert.equal(detail.body.weeks[0].done, 1);
+  });
+
+  it('marcar la fecha límite como hecha no suma a la cuota', async () => {
+    const goal = await createGoal(algebra());
+    const hito = goal.weeks.at(-1).tasks.find(t => t.kind === 'hito');
+    await ctx.request('PATCH', `/api/tasks/${hito.id}`, { done: true });
+    const detail = await ctx.request('GET', `/api/goals/${goal.id}`);
+    assert.equal(detail.body.progress.done, 0);
   });
 
   it('no guarda nada si los datos son inválidos', async () => {
@@ -98,7 +109,9 @@ describe('GET /api/goals', () => {
     assert.deepEqual(body[0].weeks.map(w => w.label),
       ['Unidades 1–2', 'Unidad 3', 'Unidades 4–5', 'Unidad 6', 'Repaso']);
     assert.equal('tasks' in body[0].weeks[0], false);
-    assert.equal(body[1].progress.total, 8 * 3 + 1); // 8 semanas x 3 sesiones + fecha límite
+    assert.equal(body[1].progress.total, 8 * 3); // 8 semanas x cuota de 3
+    assert.deepEqual(Object.keys(body[1].weeks[0]).sort(),
+      ['done', 'endDate', 'goalId', 'id', 'label', 'number', 'startDate', 'target']);
   });
 });
 
@@ -109,12 +122,58 @@ describe('GET /api/goals/:id', () => {
     assert.equal(status, 200);
     assert.deepEqual(body.weeks.map(w => w.number), [1, 2, 3, 4, 5, 6, 7, 8]);
     assert.equal(body.weeks[0].label, 'Diagnóstico');
-    assert.equal(body.weeks[0].tasks.length, 3);
+    assert.equal(body.weeks[0].target, 3);
+    assert.deepEqual(body.weeks[0].tasks, []); // las sesiones no vienen pre-fechadas
   });
 
   it('404 si no existe, 400 si el id es inválido', async () => {
     assert.equal((await ctx.request('GET', '/api/goals/9999')).status, 404);
     assert.equal((await ctx.request('GET', '/api/goals/abc')).status, 400);
+  });
+});
+
+describe('POST /api/goals/:id/sessions', () => {
+  const logSession = (goalId, date) => ctx.request('POST', `/api/goals/${goalId}/sessions`, { date });
+
+  it('registra una sesión hecha ese día, en su semana, visible en el calendario', async () => {
+    const goal = await createGoal(running());
+    const res = await logSession(goal.id, '2026-10-14'); // miércoles de la semana 2
+    assert.equal(res.status, 201);
+    assert.equal(res.body.kind, 'sesion');
+    assert.equal(res.body.done, true);
+    assert.equal(res.body.title, 'Consistencia · sesión');
+    assert.equal(res.body.goalWeekId, goal.weeks[1].id);
+
+    const october = await monthTasks(2026, 10);
+    assert.ok(october.some(t => t.id === res.body.id && t.startDate === '2026-10-14T00:00:00.000Z'));
+  });
+
+  it('el exceso de una semana no compensa otra (min por semana)', async () => {
+    const goal = await createGoal(running());
+    for (const day of ['05', '06', '07', '08']) await logSession(goal.id, `2026-10-${day}`); // 4 en la semana 1
+
+    const { body } = await ctx.request('GET', `/api/goals/${goal.id}`);
+    assert.equal(body.weeks[0].done, 4);                   // el exceso queda registrado
+    assert.deepEqual(body.progress, { done: 3, total: 24 }); // pero cuenta hasta la cuota
+  });
+
+  it('borrar o desmarcar la sesión la deja de contar', async () => {
+    const goal = await createGoal(running());
+    const a = (await logSession(goal.id, '2026-10-06')).body;
+    const b = (await logSession(goal.id, '2026-10-07')).body;
+    await ctx.request('DELETE', `/api/tasks/${a.id}`);
+    await ctx.request('PATCH', `/api/tasks/${b.id}`, { done: false });
+    const { body } = await ctx.request('GET', `/api/goals/${goal.id}`);
+    assert.equal(body.weeks[0].done, 0);
+  });
+
+  it('valida fecha, plazo, estrategia y propiedad', async () => {
+    const goal = await createGoal(running());
+    assert.equal((await logSession(goal.id, 'ayer')).status, 400);
+    assert.ok((await logSession(goal.id, '2026-12-01')).body.fields.date);       // fuera del plazo
+    const divisible = await createGoal(algebra());
+    assert.ok((await logSession(divisible.id, '2026-10-06')).body.fields.strategy);
+    assert.equal((await logSession(9999, '2026-10-06')).status, 404);
   });
 });
 

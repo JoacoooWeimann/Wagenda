@@ -1,5 +1,4 @@
 import { distribute } from './distribute.js';
-import { addDays } from '../dates.js';
 import { PHASE_TEMPLATES } from './templates.js';
 
 // Error de planificación esperable (ej. plazo demasiado corto): el controller
@@ -54,6 +53,7 @@ export function planDivisible(weeks, { totalUnits, unitName = 'Unidad', reviewWe
       return {
         ...week,
         label: nothingYet ? 'Preparación' : 'Refuerzo',
+        target: 1,
         tasks: [{
           ...span,
           title: nothingYet ? 'Organizar materiales y plan de trabajo' : 'Repasar lo visto hasta ahora'
@@ -67,6 +67,7 @@ export function planDivisible(weeks, { totalUnits, unitName = 'Unidad', reviewWe
     return {
       ...week,
       label,
+      target: units.length,
       tasks: units.map(n => ({ ...span, title: `${unitName} ${n}` }))
     };
   });
@@ -77,13 +78,16 @@ export function planDivisible(weeks, { totalUnits, unitName = 'Unidad', reviewWe
     planned.push({
       ...week,
       label: 'Repaso',
+      target: 1,
       tasks: [{ startDate: week.startDate, endDate: week.endDate, title }]
     });
   });
   return planned;
 }
 
-// --- Estrategia "fases": progresión en 4 fases con sesiones en días puntuales --
+// --- Estrategia "fases": progresión en 4 fases con cuota semanal de sesiones --
+// No fija días: el usuario registra cada sesión el día que la hace, y al final
+// de la semana se compara lo hecho con la cuota (target).
 export function planFases(weeks, { type, sessionsPerWeek }) {
   if (weeks.length < MIN_WEEKS_FASES) {
     throw new PlanError('deadline', `La estrategia por fases necesita al menos ${MIN_WEEKS_FASES} semanas`);
@@ -94,28 +98,11 @@ export function planFases(weeks, { type, sessionsPerWeek }) {
   const phaseWeeks = [1, ...distribute(weeks.length - 2, [1, 1]), 1];
   const phaseOfWeek = phaseWeeks.flatMap((count, p) => Array(count).fill(phases[p]));
 
-  return weeks.map((week, i) => {
-    const phase = phaseOfWeek[i];
-
-    // Semanas parciales: sesiones proporcionales a sus días (al menos 1)
-    const sessions = Math.min(week.days, Math.max(1, Math.round(sessionsPerWeek * week.days / 7)));
-
-    // Qué días de la semana llevan sesión: se reparten entre los días disponibles
-    const perDay = distribute(sessions, Array(week.days).fill(1));
-    const dayOffsets = perDay.flatMap((n, d) => (n > 0 ? [d] : []));
-
-    return {
-      ...week,
-      label: phase.name,
-      tasks: dayOffsets.map((offset, k) => {
-        const date = addDays(week.startDate, offset);
-        return {
-          startDate: date,
-          endDate: date,
-          title: `${phase.name} · sesión ${k + 1}/${sessions}`,
-          description: phase.description
-        };
-      })
-    };
-  });
+  return weeks.map((week, i) => ({
+    ...week,
+    label: phaseOfWeek[i].name,
+    // Semanas parciales: cuota proporcional a sus días (al menos 1)
+    target: Math.min(week.days, Math.max(1, Math.round(sessionsPerWeek * week.days / 7))),
+    tasks: []
+  }));
 }

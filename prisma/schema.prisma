@@ -25,6 +25,14 @@ enum PlanStrategy {
   fases
 }
 
+// tarea: tarea común o unidad de un plan · sesion: sesión registrada de un
+// objetivo por fases · hito: marca de fecha límite (no cuenta para la cuota)
+enum TaskKind {
+  tarea
+  sesion
+  hito
+}
+
 model User {
   id    Int    @id @default(autoincrement())
   name  String @default("Invitado")
@@ -58,6 +66,7 @@ model GoalWeek {
   startDate DateTime
   endDate   DateTime
   label     String // "Unidades 3–4", "Repaso", "Consistencia"...
+  target    Int // cuota de la semana: sesiones (fases) o tareas del plan (divisible)
 
   goal   Goal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
   goalId Int
@@ -74,6 +83,7 @@ model Task {
   endDate     DateTime
   done        Boolean  @default(false)
   priority    Priority @default(normal)
+  kind        TaskKind @default(tarea)
   category    String?
   createdAt   DateTime @default(now())
 

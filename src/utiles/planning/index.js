@@ -20,28 +20,32 @@ export function generatePlan(goal) {
     ? planDivisible(weeks, goal)
     : planFases(weeks, goal);
 
-  // Marca de la fecha límite: visible en el calendario, con prioridad alta
+  // Marca de la fecha límite: visible en el calendario, con prioridad alta.
+  // Es un "hito": no cuenta para la cuota de la semana.
   planned.at(-1).tasks.push({
     startDate: goal.deadline,
     endDate: goal.deadline,
     title: `Fecha límite: ${goal.title}`.slice(0, TITLE_MAX),
-    priority: 'alta'
+    priority: 'alta',
+    kind: 'hito'
   });
 
   // Completa los campos comunes para que cada tarea tenga la forma de una Task
   const category = TYPE_LABELS[goal.type];
   return {
-    weeks: planned.map(({ number, startDate, endDate, label, tasks }) => ({
+    weeks: planned.map(({ number, startDate, endDate, label, target, tasks }) => ({
       number,
       startDate,
       endDate,
       label,
+      target,
       tasks: tasks.map(t => ({
         title: t.title,
         description: t.description ?? null,
         startDate: t.startDate,
         endDate: t.endDate,
         priority: t.priority ?? 'normal',
+        kind: t.kind ?? 'tarea',
         category
       }))
     }))

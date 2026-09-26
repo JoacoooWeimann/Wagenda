@@ -22,7 +22,7 @@ const running = (extra = {}) => ({
 });
 
 // Tareas del plan que no son la marca de fecha límite
-const workTasks = (week) => week.tasks.filter(t => !t.title.startsWith('Fecha límite'));
+const workTasks = (week) => week.tasks.filter(t => t.kind !== 'hito');
 
 describe('estrategia divisible', () => {
   it('con repaso: 6 unidades en 4 semanas + semana de repaso', () => {
@@ -99,27 +99,18 @@ describe('estrategia fases', () => {
     ]);
   });
 
-  it('3 sesiones por semana completa caen martes, jueves y sábado', () => {
+  it('cada semana tiene una cuota de sesiones y no hay sesiones pre-fechadas', () => {
     const { weeks } = generatePlan(running());
-    const days = workTasks(weeks[1]).map(t => weekday(t.startDate));
-    assert.deepEqual(days, ['mar', 'jue', 'sáb']);
-    assert.deepEqual(workTasks(weeks[1]).map(t => t.title),
-      ['Consistencia · sesión 1/3', 'Consistencia · sesión 2/3', 'Consistencia · sesión 3/3']);
+    assert.ok(weeks.every(w => w.target === 3));
+    assert.ok(weeks.every(w => workTasks(w).length === 0));
   });
 
-  it('las sesiones son de un día y llevan la descripción de la fase', () => {
-    const { weeks } = generatePlan(running());
-    for (const t of workTasks(weeks[0])) {
-      assert.equal(key(t.startDate), key(t.endDate));
-      assert.equal(t.description, PHASE_TEMPLATES.fisico[0].description);
-    }
-  });
-
-  it('las semanas parciales tienen menos sesiones (al menos 1)', () => {
+  it('las semanas parciales tienen una cuota proporcional (al menos 1)', () => {
     // sábado 10/10 a jueves 5/11: primera semana de 2 días, última de 4
     const { weeks } = generatePlan(running({ startDate: d('2026-10-10'), deadline: d('2026-11-05') }));
-    assert.equal(workTasks(weeks[0]).length, 1);
-    assert.equal(workTasks(weeks.at(-1)).length, 2);
+    assert.equal(weeks[0].target, 1);
+    assert.equal(weeks.at(-1).target, 2);
+    assert.equal(weeks[1].target, 3);
   });
 
   it('con menos de 4 semanas lanza PlanError sobre deadline', () => {
@@ -161,10 +152,17 @@ describe('generatePlan: invariantes', () => {
         }
       }
 
-      // Exactamente una marca de fecha límite, en la última semana, prioridad alta
-      const deadlineTasks = all.filter(t => t.title.startsWith('Fecha límite'));
+      // Exactamente una marca de fecha límite (hito), en la última semana, prioridad alta
+      const deadlineTasks = all.filter(t => t.kind === 'hito');
       assert.equal(deadlineTasks.length, 1);
+      assert.ok(deadlineTasks[0].title.startsWith('Fecha límite'));
       assert.equal(deadlineTasks[0].priority, 'alta');
+
+      // Toda semana tiene cuota; en divisible es la cantidad de tareas de la semana
+      for (const w of weeks) {
+        assert.ok(Number.isInteger(w.target) && w.target >= 1);
+        if (goal.strategy === 'divisible') assert.equal(w.target, workTasks(w).length);
+      }
       assert.equal(key(deadlineTasks[0].startDate), key(goal.deadline));
       assert.ok(weeks.at(-1).tasks.includes(deadlineTasks[0]));
 
