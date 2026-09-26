@@ -1,22 +1,39 @@
 import { useState } from 'react';
-import { getGoal, updateTask } from '../../utiles/api.js';
-import { typeLabel, goalStatus, deadlineText, dayMonth, progressFromWeeks, percent } from '../../utiles/goals.js';
+import { getGoal, updateTask, deleteTask, logSession } from '../../utiles/api.js';
+import {
+  typeLabel, goalStatus, deadlineText, dayMonth, withWeekDone, progressFromWeeks,
+  paceOf, percent, countNoun
+} from '../../utiles/goals.js';
 import PlanWeeks from './PlanWeeks.jsx';
 
 export default function GoalCard({ goal, today, onDelete, onError }) {
   const [detail, setDetail] = useState(null); // plan con tareas, se pide al desplegar
   const [open, setOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [sessionDate, setSessionDate] = useState(today);
+  const [logging, setLogging] = useState(false);
 
-  // Una vez cargado el detalle, el progreso se calcula de ahí: así refleja
-  // las tareas marcadas en esta página sin volver a pedir la lista
-  const progress = detail ? progressFromWeeks(detail.weeks) : goal.progress;
+  // Con el plan cargado, `done` se recalcula de sus tareas: así la tarjeta refleja
+  // lo que se marca en esta página sin volver a pedir la lista
+  const weeks = detail ? withWeekDone(detail.weeks) : goal.weeks;
+  const progress = progressFromWeeks(weeks);
+  const pace = paceOf(weeks, today);
   const status = goalStatus(goal, today);
+  const isFases = goal.strategy === 'fases';
+  const noun = (n) => countNoun(goal.strategy, n);
+
+  // Última fecha en la que se puede registrar: hoy, o la fecha límite si ya pasó
+  const deadlineKey = goal.deadline.slice(0, 10);
+  const maxSessionDate = today < deadlineKey ? today : deadlineKey;
+
+  async function reload() {
+    setDetail(await getGoal(goal.id));
+  }
 
   async function toggleOpen() {
     if (!open && !detail) {
       try {
-        setDetail(await getGoal(goal.id));
+        await reload();
       } catch (err) {
         onError(`No se pudo cargar el plan: ${err.message}`);
         return;
@@ -25,15 +42,40 @@ export default function GoalCard({ goal, today, onDelete, onError }) {
     setOpen(o => !o);
   }
 
+  function replaceTasks(fn) {
+    setDetail(d => ({ ...d, weeks: d.weeks.map(w => ({ ...w, tasks: fn(w.tasks) })) }));
+  }
+
   async function toggleTask(task) {
     try {
       const updated = await updateTask(task.id, { done: !task.done });
-      setDetail(d => ({
-        ...d,
-        weeks: d.weeks.map(w => ({ ...w, tasks: w.tasks.map(t => (t.id === updated.id ? updated : t)) }))
-      }));
+      replaceTasks(tasks => tasks.map(t => (t.id === updated.id ? updated : t)));
     } catch (err) {
       onError(`No se pudo actualizar la tarea: ${err.message}`);
+    }
+  }
+
+  async function removeSession(task) {
+    try {
+      await deleteTask(task.id);
+      replaceTasks(tasks => tasks.filter(t => t.id !== task.id));
+    } catch (err) {
+      onError(`No se pudo borrar la sesión: ${err.message}`);
+    }
+  }
+
+  // Después de registrar se recarga el plan: el servidor decide en qué semana cae
+  async function registerSession(e) {
+    e.preventDefault();
+    setLogging(true);
+    try {
+      await logSession(goal.id, sessionDate);
+      await reload();
+    } catch (err) {
+      const fieldMessage = Object.values(err.fields || {})[0];
+      onError(`No se pudo registrar la sesión: ${fieldMessage || err.message}`);
+    } finally {
+      setLogging(false);
     }
   }
 
@@ -50,8 +92,31 @@ export default function GoalCard({ goal, today, onDelete, onError }) {
 
       <div className="goal-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent(progress)}>
         <div className="goal-progress-bar" style={{ width: `${percent(progress)}%` }} />
+        {pace.expected > 0 && (
+          <div className="goal-progress-marker" style={{ left: `${pace.markerPercent}%` }} title="Dónde deberías estar hoy" />
+        )}
       </div>
-      <p className="goal-progress-text">{progress.done}/{progress.total} tareas ({percent(progress)}%)</p>
+      <p className="goal-progress-text">
+        {progress.done}/{progress.total} {noun(progress.total)} ({percent(progress)}%)
+        {pace.expected > 0 && (
+          pace.behind > 0
+            ? <span className="goal-pace-behind"> · atrasado {pace.behind} {noun(pace.behind)}</span>
+            : <span className="goal-pace-ok"> · al día</span>
+        )}
+      </p>
+
+      {isFases && status.kind !== 'upcoming' && (
+        <form className="goal-session-form" onSubmit={registerSession}>
+          <input
+            type="date" value={sessionDate} aria-label="Fecha de la sesión"
+            min={goal.startDate.slice(0, 10)} max={maxSessionDate}
+            onChange={(e) => setSessionDate(e.target.value)}
+          />
+          <button type="submit" className="goal-btn-primary" disabled={logging}>
+            {logging ? 'Registrando…' : '+ Registrar sesión'}
+          </button>
+        </form>
+      )}
 
       <div className="goal-actions">
         <button type="button" className="goal-btn" onClick={toggleOpen} aria-expanded={open}>
@@ -68,7 +133,15 @@ export default function GoalCard({ goal, today, onDelete, onError }) {
         )}
       </div>
 
-      {open && detail && <PlanWeeks weeks={detail.weeks} onToggle={toggleTask} />}
+      {open && detail && (
+        <PlanWeeks
+          weeks={weeks}
+          strategy={goal.strategy}
+          today={today}
+          onToggle={toggleTask}
+          onDeleteSession={removeSession}
+        />
+      )}
     </article>
   );
 }

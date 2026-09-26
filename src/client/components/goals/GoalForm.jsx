@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { previewGoal, createGoal } from '../../utiles/api.js';
-import { GOAL_TYPES, suggestedStrategy, todayKey, buildGoalPayload } from '../../utiles/goals.js';
+import { GOAL_TYPES, suggestedStrategy, todayKey, buildGoalPayload, countNoun } from '../../utiles/goals.js';
 import { FieldError, ErrorBanner } from '../common.jsx';
 import PlanWeeks from './PlanWeeks.jsx';
 
@@ -81,7 +81,7 @@ export default function GoalForm({ onCreated, onCancel }) {
   }
 
   const invalid = (name) => (fieldErrors[name] ? 'is-invalid' : '');
-  const taskCount = preview?.weeks.reduce((n, w) => n + w.tasks.length, 0);
+  const totalTarget = preview?.weeks.reduce((n, w) => n + w.target, 0);
 
   return (
     <section className="goals-card">
@@ -169,8 +169,10 @@ export default function GoalForm({ onCreated, onCancel }) {
 
       {preview && (
         <div className="goal-preview">
-          <h3>Vista previa · {preview.weeks.length} semanas · {taskCount} tareas</h3>
-          <PlanWeeks weeks={preview.weeks} />
+          <h3>
+            Vista previa · {preview.weeks.length} semanas · {totalTarget} {countNoun(form.strategy, totalTarget)} en total
+          </h3>
+          <PlanWeeks weeks={preview.weeks} strategy={form.strategy} />
           <div className="goal-actions">
             <button type="button" className="goal-btn-primary" onClick={handleCreate} disabled={busy}>
               {busy ? 'Creando…' : 'Crear plan'}

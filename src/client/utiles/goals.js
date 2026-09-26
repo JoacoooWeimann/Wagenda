@@ -54,9 +54,54 @@ export function deadlineText(goal, today) {
   return days === -1 ? 'venció hace 1 día' : `venció hace ${-days} días`;
 }
 
+// Qué se cuenta en cada estrategia: sesiones (fases) o tareas del plan (divisible)
+export function countNoun(strategy, n) {
+  if (strategy === 'fases') return n === 1 ? 'sesión' : 'sesiones';
+  return n === 1 ? 'tarea' : 'tareas';
+}
+
+// Recalcula `done` de cada semana a partir de sus tareas (el hito no cuenta).
+// Mismo criterio que el servidor; se usa cuando el plan ya está cargado y el
+// usuario marca tareas o registra sesiones desde esta página.
+export function withWeekDone(weeks) {
+  return weeks.map(w => ({ ...w, done: w.tasks.filter(t => t.done && t.kind !== 'hito').length }));
+}
+
+// Cumplimiento: Σ min(hecho, cuota) / Σ cuota (el exceso de una semana no compensa otra)
 export function progressFromWeeks(weeks) {
-  const tasks = weeks.flatMap(w => w.tasks);
-  return { done: tasks.filter(t => t.done).length, total: tasks.length };
+  return {
+    done: weeks.reduce((n, w) => n + Math.min(w.done, w.target), 0),
+    total: weeks.reduce((n, w) => n + w.target, 0)
+  };
+}
+
+// Resumen de una semana según el día de hoy
+export function weekSummary(week, today, strategy) {
+  const { done, target } = week;
+  const start = keyOf(week.startDate);
+  const end = keyOf(week.endDate);
+  const noun = (n) => countNoun(strategy, n);
+
+  if (today < start) return { state: 'future', text: `Cuota: ${target} ${noun(target)}` };
+  if (today <= end) {
+    const left = daysBetweenKeys(today, end);
+    const when = left === 0 ? 'último día' : left === 1 ? 'queda 1 día' : `quedan ${left} días`;
+    return { state: 'current', text: `Llevás ${done} de ${target} · ${when}` };
+  }
+  if (done > target) return { state: 'exceeded', text: `★ Superaste la cuota (${done}/${target})` };
+  if (done === target) return { state: 'met', text: `✔ Cuota cumplida (${done}/${target})` };
+  const missing = target - done;
+  return { state: 'short', text: `✖ Te ${missing === 1 ? 'faltó' : 'faltaron'} ${missing} ${noun(missing)} (${done}/${target})` };
+}
+
+// Ritmo: cuánto se debería llevar según las semanas ya cerradas, y cuánto falta.
+// La semana en curso no cuenta: todavía se puede completar.
+export function paceOf(weeks, today) {
+  const closed = weeks.filter(w => keyOf(w.endDate) < today);
+  const expected = closed.reduce((n, w) => n + w.target, 0);
+  const behind = closed.reduce((n, w) => n + (w.target - Math.min(w.done, w.target)), 0);
+  const total = weeks.reduce((n, w) => n + w.target, 0);
+  return { expected, behind, markerPercent: total === 0 ? 0 : Math.round((expected / total) * 100) };
 }
 
 export const percent = ({ done, total }) => (total === 0 ? 0 : Math.round((done / total) * 100));

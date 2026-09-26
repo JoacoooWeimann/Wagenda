@@ -2,7 +2,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   suggestedStrategy, typeLabel, todayKey, dayMonth, daysBetweenKeys,
-  goalStatus, deadlineText, progressFromWeeks, percent, buildGoalPayload
+  goalStatus, deadlineText, progressFromWeeks, percent, buildGoalPayload,
+  withWeekDone, weekSummary, paceOf, countNoun
 } from '../../src/client/utiles/goals.js';
 
 const iso = (k) => `${k}T00:00:00.000Z`;
@@ -50,11 +51,45 @@ describe('helpers de objetivos (cliente)', () => {
     assert.equal(deadlineText(goal, '2026-10-30'), 'venció hace 5 días');
   });
 
-  it('progreso y porcentaje', () => {
-    const weeks = [{ tasks: [{ done: true }, { done: false }] }, { tasks: [{ done: true }] }];
-    assert.deepEqual(progressFromWeeks(weeks), { done: 2, total: 3 });
+  it('withWeekDone cuenta lo hecho sin el hito', () => {
+    const [week] = withWeekDone([{ target: 2, tasks: [
+      { done: true, kind: 'sesion' }, { done: false, kind: 'tarea' }, { done: true, kind: 'hito' }
+    ] }]);
+    assert.equal(week.done, 1);
+  });
+
+  it('cumplimiento: el exceso de una semana no compensa otra', () => {
+    const weeks = [{ done: 5, target: 3 }, { done: 1, target: 3 }];
+    assert.deepEqual(progressFromWeeks(weeks), { done: 4, total: 6 });
     assert.equal(percent({ done: 2, total: 3 }), 67);
     assert.equal(percent({ done: 0, total: 0 }), 0);
+  });
+
+  it('weekSummary: futura, en curso y los tres cierres', () => {
+    const week = (done) => ({ ...goal.weeks[1], done, target: 3 }); // 12/10 a 18/10
+    assert.equal(weekSummary(week(0), '2026-10-11', 'fases').text, 'Cuota: 3 sesiones');
+    assert.equal(weekSummary(week(1), '2026-10-14', 'fases').text, 'Llevás 1 de 3 · quedan 4 días');
+    assert.equal(weekSummary(week(1), '2026-10-18', 'fases').text, 'Llevás 1 de 3 · último día');
+    assert.deepEqual(weekSummary(week(3), '2026-10-19', 'fases'), { state: 'met', text: '✔ Cuota cumplida (3/3)' });
+    assert.equal(weekSummary(week(4), '2026-10-19', 'fases').state, 'exceeded');
+    assert.equal(weekSummary(week(2), '2026-10-19', 'fases').text, '✖ Te faltó 1 sesión (2/3)');
+    assert.equal(weekSummary(week(0), '2026-10-19', 'divisible').text, '✖ Te faltaron 3 tareas (0/3)');
+  });
+
+  it('paceOf: solo cuentan las semanas cerradas', () => {
+    const weeks = goal.weeks.map((w, i) => ({ ...w, target: 3, done: [3, 1, 0][i] }));
+    // hoy 14/10: cerrada solo la semana 1 (cumplida)
+    assert.deepEqual(paceOf(weeks, '2026-10-14'), { expected: 3, behind: 0, markerPercent: 33 });
+    // hoy 20/10: cerradas 1 y 2; a la 2 le faltaron 2
+    assert.deepEqual(paceOf(weeks, '2026-10-20'), { expected: 6, behind: 2, markerPercent: 67 });
+    // antes de empezar no se espera nada
+    assert.equal(paceOf(weeks, '2026-10-01').expected, 0);
+  });
+
+  it('countNoun', () => {
+    assert.equal(countNoun('fases', 1), 'sesión');
+    assert.equal(countNoun('fases', 2), 'sesiones');
+    assert.equal(countNoun('divisible', 2), 'tareas');
   });
 
   it('buildGoalPayload manda solo los parámetros de la estrategia', () => {
