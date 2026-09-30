@@ -8,11 +8,12 @@ import PlanWeeks from './PlanWeeks.jsx';
 import GoalInfoForm from './GoalInfoForm.jsx';
 import DeadlineForm from './DeadlineForm.jsx';
 
-export default function GoalCard({ goal, today, onChange, onDelete, onError }) {
+export default function GoalCard({ goal, today, trackers, onChange, onDelete, onError }) {
   const [detail, setDetail] = useState(null); // plan con tareas, se pide al desplegar
   const [open, setOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [sessionDate, setSessionDate] = useState(today);
+  const [sessionValue, setSessionValue] = useState('');
   const [logging, setLogging] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editingInfo, setEditingInfo] = useState(false);
@@ -75,7 +76,9 @@ export default function GoalCard({ goal, today, onChange, onDelete, onError }) {
     e.preventDefault();
     setLogging(true);
     try {
-      await logSession(goal.id, sessionDate);
+      // Con seguimiento vinculado, la medición es opcional: vacío = solo la sesión
+      await logSession(goal.id, sessionDate, sessionValue === '' ? undefined : Number(sessionValue));
+      setSessionValue('');
       await reload();
     } catch (err) {
       const fieldMessage = Object.values(err.fields || {})[0];
@@ -144,7 +147,7 @@ export default function GoalCard({ goal, today, onChange, onDelete, onError }) {
         <h3>{goal.title}</h3>
         <span className="goal-type">{typeLabel(goal.type)}</span>
       </div>
-      {editingInfo && <GoalInfoForm goal={goal} onSave={saveInfo} onCancel={() => setEditingInfo(false)} />}
+      {editingInfo && <GoalInfoForm goal={goal} trackers={trackers} onSave={saveInfo} onCancel={() => setEditingInfo(false)} />}
       {goal.description && !editingInfo && <p className="goal-description">{goal.description}</p>}
       <p className="goal-meta">
         Fecha límite: {dayMonth(goal.deadline)} · {deadlineText(goal, today)}
@@ -176,6 +179,14 @@ export default function GoalCard({ goal, today, onChange, onDelete, onError }) {
             min={goal.startDate.slice(0, 10)} max={maxSessionDate}
             onChange={(e) => setSessionDate(e.target.value)}
           />
+          {goal.tracker && (
+            <input
+              type="number" step="any" value={sessionValue} className="goal-session-value"
+              placeholder={`${goal.tracker.name}${goal.tracker.unit ? ` (${goal.tracker.unit})` : ''}`}
+              aria-label={`Medición de ${goal.tracker.name} (opcional)`}
+              onChange={(e) => setSessionValue(e.target.value)}
+            />
+          )}
           <button type="submit" className="goal-btn-primary" disabled={logging}>
             {logging ? 'Registrando…' : '+ Registrar sesión'}
           </button>

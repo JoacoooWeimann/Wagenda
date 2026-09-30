@@ -133,6 +133,7 @@ export function buildGoalPayload(form) {
     payload.reviewWeek = form.reviewWeek;
   } else {
     payload.sessionsPerWeek = toInt(form.sessionsPerWeek);
+    if (form.trackerId) payload.trackerId = Number(form.trackerId);
   }
   return payload;
 }

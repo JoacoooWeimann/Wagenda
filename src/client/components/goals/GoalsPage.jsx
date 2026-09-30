@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getGoals, deleteGoal } from '../../utiles/api.js';
+import { getGoals, deleteGoal, getTrackers } from '../../utiles/api.js';
 import { todayKey, isClosed } from '../../utiles/goals.js';
 import { ErrorBanner } from '../common.jsx';
 import GoalCard from './GoalCard.jsx';
@@ -9,6 +9,7 @@ export default function GoalsPage() {
   const [goals, setGoals] = useState(null); // null = todavía cargando
   const [showForm, setShowForm] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [trackers, setTrackers] = useState([]); // para vincular objetivos por fases
   const [error, setError] = useState(null);
   const today = todayKey();
 
@@ -27,6 +28,8 @@ export default function GoalsPage() {
   // Sin objetivos, el formulario arranca abierto; con objetivos, plegado
   useEffect(() => {
     loadGoals().then(data => setShowForm(data.length === 0));
+    // Si falla, los objetivos siguen funcionando: solo no se ofrece vincular
+    getTrackers().then(setTrackers).catch(() => setTrackers([]));
   }, []);
 
   async function handleCreated() {
@@ -50,7 +53,7 @@ export default function GoalsPage() {
   const active = goals?.filter(g => !isClosed(g)) ?? [];
   const history = goals?.filter(isClosed) ?? [];
   const card = (goal) => (
-    <GoalCard key={goal.id} goal={goal} today={today} onChange={handleChange} onDelete={handleDelete} onError={setError} />
+    <GoalCard key={goal.id} goal={goal} today={today} trackers={trackers} onChange={handleChange} onDelete={handleDelete} onError={setError} />
   );
 
   return (
@@ -85,6 +88,7 @@ export default function GoalsPage() {
 
       {showForm && (
         <GoalForm
+          trackers={trackers}
           onCreated={handleCreated}
           onCancel={goals?.length > 0 ? () => setShowForm(false) : null}
         />

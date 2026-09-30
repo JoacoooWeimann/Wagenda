@@ -292,7 +292,8 @@
   margin-top: 12px;
 }
 
-.goal-session-form input[type="date"] {
+.goal-session-form input[type="date"],
+.goal-session-form .goal-session-value {
   padding: 6px 8px;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -376,3 +377,4 @@ a.goal-btn { text-decoration: none; display: inline-block; }
 .goal-info-form { margin: 8px 0 12px; }
 .goal-description { margin: 4px 0; color: #555; font-size: 0.9rem; white-space: pre-line; }
 .goal-status-closed { color: #555; font-weight: 500; }
+.goal-session-value { width: 170px; }

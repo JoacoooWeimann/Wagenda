@@ -3,6 +3,7 @@ import { previewGoal, createGoal } from '../../utiles/api.js';
 import { GOAL_TYPES, suggestedStrategy, todayKey, buildGoalPayload, countNoun, MAX_CONTENT_TYPES } from '../../utiles/goals.js';
 import { FieldError, ErrorBanner } from '../common.jsx';
 import PlanWeeks from './PlanWeeks.jsx';
+import TrackerSelect from './TrackerSelect.jsx';
 
 const initialForm = () => ({
   title: '',
@@ -13,10 +14,11 @@ const initialForm = () => ({
   deadline: '',
   contents: [{ name: 'Unidad', count: '' }],
   reviewWeek: true,
-  sessionsPerWeek: '3'
+  sessionsPerWeek: '3',
+  trackerId: ''
 });
 
-export default function GoalForm({ onCreated, onCancel }) {
+export default function GoalForm({ trackers = [], onCreated, onCancel }) {
   const [form, setForm] = useState(initialForm);
   const [strategyTouched, setStrategyTouched] = useState(false);
   const [preview, setPreview] = useState(null);
@@ -164,6 +166,8 @@ export default function GoalForm({ onCreated, onCancel }) {
                 onChange={(e) => updateField('sessionsPerWeek', e.target.value)} />
               <FieldError message={fieldErrors.sessionsPerWeek} />
             </label>
+            <TrackerSelect trackers={trackers} value={form.trackerId} error={fieldErrors.trackerId}
+              onChange={(value) => updateField('trackerId', value)} />
           </div>
         )}
 

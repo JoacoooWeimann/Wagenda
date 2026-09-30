@@ -12,7 +12,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         app: path.resolve(import.meta.dirname, 'src/client/main.jsx'),   // calendario
-        goals: path.resolve(import.meta.dirname, 'src/client/goals.jsx') // objetivos
+        goals: path.resolve(import.meta.dirname, 'src/client/goals.jsx'), // objetivos
+        trackers: path.resolve(import.meta.dirname, 'src/client/trackers.jsx') // seguimientos
       },
       output: {
         entryFileNames: '[name].js',

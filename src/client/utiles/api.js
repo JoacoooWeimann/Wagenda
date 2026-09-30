@@ -46,6 +46,14 @@ export const getGoal = (id) => request('GET', `/api/goals/${id}`);
 export const updateGoal = (id, changes) => request('PATCH', `/api/goals/${id}`, changes);
 export const changeDeadline = (id, deadline, today) => request('PUT', `/api/goals/${id}/deadline`, { deadline, today });
 export const deleteGoal = (id) => request('DELETE', `/api/goals/${id}`);
-export const logSession = (goalId, date) => request('POST', `/api/goals/${goalId}/sessions`, { date });
+export const logSession = (goalId, date, value) => request('POST', `/api/goals/${goalId}/sessions`, { date, value });
 export const updateWeek = (goalId, weekId, changes) => request('PATCH', `/api/goals/${goalId}/weeks/${weekId}`, changes);
 export const addWeekTask = (goalId, weekId, title) => request('POST', `/api/goals/${goalId}/weeks/${weekId}/tasks`, { title });
+
+export const getTrackers = () => request('GET', '/api/trackers');
+export const getTracker = (id) => request('GET', `/api/trackers/${id}`);
+export const createTracker = (tracker) => request('POST', '/api/trackers', tracker);
+export const updateTracker = (id, changes) => request('PATCH', `/api/trackers/${id}`, changes);
+export const deleteTracker = (id) => request('DELETE', `/api/trackers/${id}`);
+export const addEntry = (trackerId, entry) => request('POST', `/api/trackers/${trackerId}/entries`, entry);
+export const deleteEntry = (trackerId, entryId) => request('DELETE', `/api/trackers/${trackerId}/entries/${entryId}`);
