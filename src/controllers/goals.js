@@ -1,10 +1,10 @@
 import prisma from '../utiles/db.js';
 import { invalid, notFound } from '../utiles/responses.js';
 import { hasErrors, parseId } from '../utiles/validation/common.js';
-import { validateGoalCreate, validateWeekUpdate } from '../utiles/validation/goals.js';
+import { validateGoalCreate, validateGoalUpdate, validateWeekUpdate } from '../utiles/validation/goals.js';
 import { requiredText } from '../utiles/validation/common.js';
 import { currentUserId } from '../utiles/currentUser.js';
-import { generatePlan, PlanError } from '../utiles/planning/index.js';
+import { generatePlan, PlanError, milestoneTitle } from '../utiles/planning/index.js';
 import { TYPE_LABELS } from '../utiles/planning/templates.js';
 import { parseDateOnly } from '../utiles/dates.js';
 import { TASK_WITH_GOAL } from '../utiles/queries.js';
@@ -124,6 +124,34 @@ export async function getGoal(req, res) {
   if (!goal) return notFound(res, GOAL_NOT_FOUND);
 
   res.json(withProgress(goal, { keepTasks: true }));
+}
+
+// Edita los datos básicos. Lo que se copió a las tareas al crear el plan se
+// actualiza en la misma transacción: el título del hito y la categoría.
+// Las etiquetas de las fases no se tocan: son editables y pueden estar personalizadas.
+export async function updateGoal(req, res) {
+  const id = parseId(req.params.id);
+  if (!id) return invalid(res, { id: 'id inválido' });
+
+  const { data, fields, error } = validateGoalUpdate(req.body);
+  if (hasErrors(fields)) return invalid(res, fields);
+  if (error) return res.status(400).json({ error });
+
+  const goal = await prisma.goal.findFirst({ where: { id, userId: currentUserId(req) } });
+  if (!goal) return notFound(res, GOAL_NOT_FOUND);
+
+  const goalTasks = { goalWeek: { goalId: goal.id } };
+  const updated = await prisma.$transaction(async (tx) => {
+    if (data.title && data.title !== goal.title) {
+      await tx.task.updateMany({ where: { ...goalTasks, kind: 'hito' }, data: { title: milestoneTitle(data.title) } });
+    }
+    if (data.type && data.type !== goal.type) {
+      await tx.task.updateMany({ where: goalTasks, data: { category: TYPE_LABELS[data.type] } });
+    }
+    return tx.goal.update({ where: { id: goal.id }, data, include: WEEKS_WITH_TASKS });
+  });
+
+  res.json(withProgress(updated, { keepTasks: true }));
 }
 
 export async function deleteGoal(req, res) {

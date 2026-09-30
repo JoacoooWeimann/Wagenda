@@ -10,6 +10,10 @@ export const MAX_WEEKS = 52;
 
 const TITLE_MAX = 100; // mismo límite que el título de una Task
 
+// Título del hito de fecha límite. Exportado: al renombrar el objetivo, el
+// controller lo recalcula con la misma regla.
+export const milestoneTitle = (goalTitle) => `Fecha límite: ${goalTitle}`.slice(0, TITLE_MAX);
+
 export function generatePlan(goal) {
   const weeks = buildWeeks(goal.startDate, goal.deadline);
   if (weeks.length > MAX_WEEKS) {
@@ -25,7 +29,7 @@ export function generatePlan(goal) {
   planned.at(-1).tasks.push({
     startDate: goal.deadline,
     endDate: goal.deadline,
-    title: `Fecha límite: ${goal.title}`.slice(0, TITLE_MAX),
+    title: milestoneTitle(goal.title),
     priority: 'alta',
     kind: 'hito'
   });

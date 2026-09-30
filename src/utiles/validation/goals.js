@@ -126,3 +126,28 @@ export function validateWeekUpdate(body = {}, strategy) {
   const error = !hasErrors(fields) && Object.keys(data).length === 0 ? 'No hay campos para actualizar' : undefined;
   return { data, fields, applyToPhase, error };
 }
+
+// Edición de los datos básicos de un objetivo. La estrategia no está: define la
+// estructura del plan (contenidos o cuotas), cambiarla es crear otro objetivo.
+export function validateGoalUpdate(body = {}) {
+  const fields = {};
+  const data = {};
+
+  if (body.title !== undefined) {
+    const title = requiredText(body.title, GOAL_LIMITS.title, 'title', fields, 'El título es obligatorio');
+    if (title !== undefined) data.title = title;
+  }
+
+  if (body.description !== undefined) {
+    const description = optionalText(body.description, GOAL_LIMITS.description, 'description', fields);
+    if (description !== undefined) data.description = description;
+  }
+
+  if (body.type !== undefined) {
+    if (GOAL_TYPES.includes(body.type)) data.type = body.type;
+    else fields.type = 'Tipo de objetivo inválido';
+  }
+
+  const error = !hasErrors(fields) && Object.keys(data).length === 0 ? 'No hay campos para actualizar' : undefined;
+  return { data, fields, error };
+}

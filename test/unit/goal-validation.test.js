@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateGoalCreate, validateWeekUpdate } from '../../src/utiles/validation/goals.js';
+import { validateGoalCreate, validateGoalUpdate, validateWeekUpdate } from '../../src/utiles/validation/goals.js';
 
 const divisible = (extra = {}) => ({
   title: 'Álgebra', type: 'academico', strategy: 'divisible',
@@ -100,5 +100,20 @@ describe('validateWeekUpdate', () => {
     assert.ok(validateWeekUpdate({ label: 'x'.repeat(51) }, 'fases').fields.label);
     assert.ok(validateWeekUpdate({}, 'fases').error);
     assert.ok(validateWeekUpdate({ applyToPhase: 'si', label: 'x' }, 'fases').fields.applyToPhase);
+  });
+});
+
+describe('validateGoalUpdate', () => {
+  it('acepta solo los campos que vienen', () => {
+    assert.deepEqual(validateGoalUpdate({ title: ' Nuevo ' }), { data: { title: 'Nuevo' }, fields: {}, error: undefined });
+    assert.deepEqual(validateGoalUpdate({ description: '' }).data, { description: null });
+    assert.deepEqual(validateGoalUpdate({ type: 'fisico' }).data, { type: 'fisico' });
+  });
+
+  it('rechaza título vacío, tipo inválido y cuerpo sin campos editables', () => {
+    assert.ok(validateGoalUpdate({ title: '  ' }).fields.title);
+    assert.ok(validateGoalUpdate({ type: 'x' }).fields.type);
+    assert.ok(validateGoalUpdate({}).error);
+    assert.ok(validateGoalUpdate({ strategy: 'fases' }).error); // la estrategia no se edita
   });
 });

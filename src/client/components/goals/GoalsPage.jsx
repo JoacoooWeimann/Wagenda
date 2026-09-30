@@ -33,6 +33,8 @@ export default function GoalsPage() {
     setShowForm(false);
   }
 
+  const handleChange = (updated) => setGoals(gs => gs.map(g => (g.id === updated.id ? updated : g)));
+
   async function handleDelete(id) {
     try {
       await deleteGoal(id);
@@ -57,7 +59,7 @@ export default function GoalsPage() {
         {goals === null && <p className="goals-empty">Cargando…</p>}
         {goals?.length === 0 && <p className="goals-empty">Todavía no tenés objetivos. Creá el primero abajo.</p>}
         {goals?.map(goal => (
-          <GoalCard key={goal.id} goal={goal} today={today} onDelete={handleDelete} onError={setError} />
+          <GoalCard key={goal.id} goal={goal} today={today} onChange={handleChange} onDelete={handleDelete} onError={setError} />
         ))}
       </section>
 

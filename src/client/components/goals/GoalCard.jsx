@@ -1,18 +1,20 @@
 import { useState } from 'react';
-import { getGoal, updateTask, deleteTask, logSession, updateWeek, addWeekTask } from '../../utiles/api.js';
+import { getGoal, updateGoal, updateTask, deleteTask, logSession, updateWeek, addWeekTask } from '../../utiles/api.js';
 import {
   typeLabel, goalStatus, deadlineText, dayMonth, withWeekDone, progressFromWeeks,
   paceOf, percent, countNoun, calendarLink
 } from '../../utiles/goals.js';
 import PlanWeeks from './PlanWeeks.jsx';
+import GoalInfoForm from './GoalInfoForm.jsx';
 
-export default function GoalCard({ goal, today, onDelete, onError }) {
+export default function GoalCard({ goal, today, onChange, onDelete, onError }) {
   const [detail, setDetail] = useState(null); // plan con tareas, se pide al desplegar
   const [open, setOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [sessionDate, setSessionDate] = useState(today);
   const [logging, setLogging] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [editingInfo, setEditingInfo] = useState(false);
 
   // Con el plan cargado, `done` se recalcula de sus tareas: así la tarjeta refleja
   // lo que se marca en esta página sin volver a pedir la lista
@@ -93,6 +95,18 @@ export default function GoalCard({ goal, today, onDelete, onError }) {
     }
   }
 
+  // Cambios en el objetivo en sí (datos, estado, plazo): el servidor devuelve el
+  // objetivo completo con su plan; se actualizan la lista y el plan desplegado.
+  function applyGoal(updated) {
+    onChange(updated);
+    if (detail) setDetail(updated);
+  }
+
+  async function saveInfo(changes) {
+    applyGoal(await updateGoal(goal.id, changes)); // si falla, GoalInfoForm muestra los errores
+    setEditingInfo(false);
+  }
+
   const dateOnly = (iso) => iso.slice(0, 10);
   const edit = {
     onUpdateWeek: (week, changes) =>
@@ -113,6 +127,8 @@ export default function GoalCard({ goal, today, onDelete, onError }) {
         <h3>{goal.title}</h3>
         <span className="goal-type">{typeLabel(goal.type)}</span>
       </div>
+      {editingInfo && <GoalInfoForm goal={goal} onSave={saveInfo} onCancel={() => setEditingInfo(false)} />}
+      {goal.description && !editingInfo && <p className="goal-description">{goal.description}</p>}
       <p className="goal-meta">
         Fecha límite: {dayMonth(goal.deadline)} · {deadlineText(goal, today)}
       </p>
@@ -156,6 +172,7 @@ export default function GoalCard({ goal, today, onDelete, onError }) {
           </button>
         )}
         <a className="goal-btn" href={calendarLink(goal, today)}>Ver en calendario</a>
+        {!editingInfo && <button type="button" className="goal-btn" onClick={() => setEditingInfo(true)}>Editar datos</button>}
         {confirmingDelete ? (
           <span className="goal-confirm">
             ¿Borrar el objetivo y sus tareas?

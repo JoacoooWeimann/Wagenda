@@ -316,6 +316,33 @@ describe('POST /api/goals/:id/weeks/:weekId/tasks', () => {
   });
 });
 
+describe('PATCH /api/goals/:id', () => {
+  it('edita título, tipo y descripción, y actualiza el hito y la categoría de las tareas', async () => {
+    const goal = await createGoal(algebra());
+    const res = await ctx.request('PATCH', `/api/goals/${goal.id}`, {
+      title: 'Álgebra II', type: 'profesional', description: 'Segundo cuatrimestre'
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.title, 'Álgebra II');
+    assert.equal(res.body.description, 'Segundo cuatrimestre');
+    assert.equal(res.body.strategy, 'divisible');
+
+    const tasks = res.body.weeks.flatMap(w => w.tasks);
+    assert.equal(tasks.find(t => t.kind === 'hito').title, 'Fecha límite: Álgebra II');
+    assert.ok(tasks.every(t => t.category === 'Profesional'));
+  });
+
+  it('ignora la estrategia y valida los campos', async () => {
+    const goal = await createGoal(algebra());
+    assert.equal((await ctx.request('PATCH', `/api/goals/${goal.id}`, { strategy: 'fases' })).status, 400);
+    const bad = await ctx.request('PATCH', `/api/goals/${goal.id}`, { title: '', type: 'x' });
+    assert.equal(bad.status, 400);
+    assert.ok(bad.body.fields.title);
+    assert.ok(bad.body.fields.type);
+    assert.equal((await ctx.request('PATCH', '/api/goals/9999', { title: 'x' })).status, 404);
+  });
+});
+
 describe('DELETE /api/goals/:id', () => {
   it('borra el objetivo, sus semanas y sus tareas (cascade), sin tocar tareas sueltas', async () => {
     const goal = await createGoal(algebra());
@@ -342,6 +369,7 @@ describe('propiedad de los objetivos', () => {
 
     assert.deepEqual((await ctx.request('GET', '/api/goals')).body, []);
     assert.equal((await ctx.request('GET', `/api/goals/${foreign.id}`)).status, 404);
+    assert.equal((await ctx.request('PATCH', `/api/goals/${foreign.id}`, { title: 'Mío' })).status, 404);
     assert.equal((await ctx.request('DELETE', `/api/goals/${foreign.id}`)).status, 404);
     assert.equal(await ctx.prisma.goal.count({ where: { id: foreign.id } }), 1);
   });
