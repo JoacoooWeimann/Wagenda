@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   suggestedStrategy, typeLabel, todayKey, dayMonth, daysBetweenKeys,
   goalStatus, deadlineText, progressFromWeeks, percent, buildGoalPayload,
-  withWeekDone, weekSummary, paceOf, countNoun, calendarLink
+  withWeekDone, weekSummary, paceOf, countNoun, calendarLink, weekCount, deadlineChangeNote
 } from '../../src/client/utiles/goals.js';
 
 const iso = (k) => `${k}T00:00:00.000Z`;
@@ -123,5 +123,22 @@ describe('helpers de objetivos (cliente)', () => {
     assert.equal(calendarLink(goal, '2027-01-03'), '/calendar?year=2026&month=10'); // terminado
     const closedAt = new Date(2027, 0, 3, 12).toISOString(); // cerrado después del plazo
     assert.equal(calendarLink({ ...goal, status: 'logrado', closedAt }, '2027-01-03'), '/calendar?year=2026&month=10');
+  });
+});
+
+describe('cambio de plazo', () => {
+  it('weekCount cuenta semanas de lunes a domingo, como buildWeeks', () => {
+    assert.equal(weekCount('2026-10-05', '2026-11-08'), 5); // lunes a domingo
+    assert.equal(weekCount('2026-10-07', '2026-10-12'), 2); // miércoles a lunes
+    assert.equal(weekCount('2026-10-05', '2026-10-05'), 1);
+  });
+
+  it('deadlineChangeNote anticipa qué pasa con el plan', () => {
+    const weeks = [1, 2, 3, 4, 5].map(n => ({ number: n, label: n === 5 ? 'Repaso' : 'Unidad' }));
+    const goal = { startDate: iso('2026-10-05'), strategy: 'divisible', weeks };
+    assert.equal(deadlineChangeNote(goal, '2026-11-15'), 'Se agrega 1 semana libre, para completar con «Editar plan».');
+    assert.equal(deadlineChangeNote(goal, '2026-10-25'), 'Se quitan 2 semanas; sus tareas pasan a la semana 3.');
+    assert.equal(deadlineChangeNote(goal, '2026-11-06'), 'Cambia el fin de la última semana.');
+    assert.equal(deadlineChangeNote({ ...goal, strategy: 'fases' }, '2026-11-22'), 'Se agregan 2 semanas de «Repaso».');
   });
 });

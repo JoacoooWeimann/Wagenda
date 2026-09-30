@@ -99,6 +99,12 @@ function truncate(text, max) {
 // --- Estrategia "fases": progresión en 4 fases con cuota semanal de sesiones --
 // No fija días: el usuario registra cada sesión el día que la hace, y al final
 // de la semana se compara lo hecho con la cuota (target).
+// Cuota de una semana de `days` días: proporcional a sus días (las parciales
+// reciben menos), al menos 1 y nunca más sesiones que días
+export function weekQuota(sessionsPerWeek, days) {
+  return Math.min(days, Math.max(1, Math.round(sessionsPerWeek * days / 7)));
+}
+
 export function planFases(weeks, { type, sessionsPerWeek }) {
   if (weeks.length < MIN_WEEKS_FASES) {
     throw new PlanError('deadline', `La estrategia por fases necesita al menos ${MIN_WEEKS_FASES} semanas`);
@@ -112,8 +118,7 @@ export function planFases(weeks, { type, sessionsPerWeek }) {
   return weeks.map((week, i) => ({
     ...week,
     label: phaseOfWeek[i].name,
-    // Semanas parciales: cuota proporcional a sus días (al menos 1)
-    target: Math.min(week.days, Math.max(1, Math.round(sessionsPerWeek * week.days / 7))),
+    target: weekQuota(sessionsPerWeek, week.days),
     tasks: []
   }));
 }

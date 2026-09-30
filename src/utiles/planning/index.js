@@ -1,12 +1,13 @@
 // Generador de planes: función pura. Recibe un objetivo ya validado y devuelve
 // el plan en memoria (semanas con sus tareas). No toca la base: el controller
 // decide si solo mostrarlo (preview) o guardarlo.
-import { buildWeeks } from './weeks.js';
+import { buildWeeks, MAX_WEEKS } from './weeks.js';
 import { planDivisible, planFases, PlanError } from './strategies.js';
 import { TYPE_LABELS } from './templates.js';
 
 export { PlanError } from './strategies.js';
-export const MAX_WEEKS = 52;
+export { MAX_WEEKS } from './weeks.js';
+export { resizePlan, FREE_WEEK_LABEL } from './resize.js';
 
 const TITLE_MAX = 100; // mismo límite que el título de una Task
 

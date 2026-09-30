@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { getGoal, updateGoal, updateTask, deleteTask, logSession, updateWeek, addWeekTask } from '../../utiles/api.js';
+import { getGoal, updateGoal, changeDeadline, updateTask, deleteTask, logSession, updateWeek, addWeekTask } from '../../utiles/api.js';
 import {
   typeLabel, goalStatus, deadlineText, dayMonth, withWeekDone, progressFromWeeks,
   paceOf, percent, countNoun, calendarLink, isClosed
 } from '../../utiles/goals.js';
 import PlanWeeks from './PlanWeeks.jsx';
 import GoalInfoForm from './GoalInfoForm.jsx';
+import DeadlineForm from './DeadlineForm.jsx';
 
 export default function GoalCard({ goal, today, onChange, onDelete, onError }) {
   const [detail, setDetail] = useState(null); // plan con tareas, se pide al desplegar
@@ -15,6 +16,7 @@ export default function GoalCard({ goal, today, onChange, onDelete, onError }) {
   const [logging, setLogging] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editingInfo, setEditingInfo] = useState(false);
+  const [editingDeadline, setEditingDeadline] = useState(false);
 
   // Con el plan cargado, `done` se recalcula de sus tareas: así la tarjeta refleja
   // lo que se marca en esta página sin volver a pedir la lista
@@ -112,6 +114,11 @@ export default function GoalCard({ goal, today, onChange, onDelete, onError }) {
     }
   }
 
+  async function saveDeadline(deadline) {
+    applyGoal(await changeDeadline(goal.id, deadline, today)); // si falla, DeadlineForm muestra el error
+    setEditingDeadline(false);
+  }
+
   async function saveInfo(changes) {
     applyGoal(await updateGoal(goal.id, changes)); // si falla, GoalInfoForm muestra los errores
     setEditingInfo(false);
@@ -142,6 +149,9 @@ export default function GoalCard({ goal, today, onChange, onDelete, onError }) {
       <p className="goal-meta">
         Fecha límite: {dayMonth(goal.deadline)} · {deadlineText(goal, today)}
       </p>
+      {editingDeadline && (
+        <DeadlineForm goal={goal} today={today} onSave={saveDeadline} onCancel={() => setEditingDeadline(false)} />
+      )}
       {status.text && <p className={`goal-status goal-status-${status.kind}`}>{status.text}</p>}
 
       <div className="goal-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent(progress)}>
@@ -183,6 +193,9 @@ export default function GoalCard({ goal, today, onChange, onDelete, onError }) {
         )}
         <a className="goal-btn" href={calendarLink(goal, today)}>Ver en calendario</a>
         {!editingInfo && <button type="button" className="goal-btn" onClick={() => setEditingInfo(true)}>Editar datos</button>}
+        {!closed && !editingDeadline && (
+          <button type="button" className="goal-btn" onClick={() => setEditingDeadline(true)}>Cambiar plazo</button>
+        )}
         {closed ? (
           <button type="button" className="goal-btn" onClick={() => changeStatus('activo')}>Reabrir</button>
         ) : (

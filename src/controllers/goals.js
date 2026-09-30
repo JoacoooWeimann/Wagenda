@@ -1,10 +1,12 @@
 import prisma from '../utiles/db.js';
 import { invalid, notFound } from '../utiles/responses.js';
 import { hasErrors, parseId } from '../utiles/validation/common.js';
-import { validateGoalCreate, validateGoalUpdate, validateWeekUpdate, closedGoalError } from '../utiles/validation/goals.js';
+import {
+  validateGoalCreate, validateGoalUpdate, validateWeekUpdate, validateDeadlineChange, closedGoalError
+} from '../utiles/validation/goals.js';
 import { requiredText } from '../utiles/validation/common.js';
 import { currentUserId } from '../utiles/currentUser.js';
-import { generatePlan, PlanError, milestoneTitle } from '../utiles/planning/index.js';
+import { generatePlan, resizePlan, PlanError, milestoneTitle } from '../utiles/planning/index.js';
 import { TYPE_LABELS } from '../utiles/planning/templates.js';
 import { parseDateOnly } from '../utiles/dates.js';
 import { TASK_WITH_GOAL } from '../utiles/queries.js';
@@ -284,4 +286,54 @@ export async function addWeekTask(req, res) {
     include: TASK_WITH_GOAL
   });
   res.status(201).json(task);
+}
+
+// Cambia la fecha límite. resizePlan (pura) decide qué cambia; acá se aplica en
+// una transacción: o se aplica el cambio entero o nada.
+export async function changeDeadline(req, res) {
+  const id = parseId(req.params.id);
+  if (!id) return invalid(res, { id: 'id inválido' });
+
+  const goal = await prisma.goal.findFirst({
+    where: { id, userId: currentUserId(req) },
+    include: WEEKS_WITH_TASKS
+  });
+  if (!goal) return notFound(res, GOAL_NOT_FOUND);
+  const closed = closedGoalError(goal);
+  if (closed) return invalid(res, closed);
+
+  const { data, fields } = validateDeadlineChange(req.body, goal);
+  if (hasErrors(fields)) return invalid(res, fields);
+
+  let ops;
+  try {
+    ops = resizePlan(goal, goal.weeks, data.deadline);
+  } catch (err) {
+    if (err instanceof PlanError) return invalid(res, { [err.field]: err.message });
+    throw err;
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    for (const { id: weekId, ...weekData } of ops.updateWeeks) {
+      await tx.goalWeek.update({ where: { id: weekId }, data: weekData });
+    }
+    // Última semana: la última conservada, o la última creada si se extendió
+    let lastWeekId = goal.weeks[goal.weeks.length - ops.deleteWeekIds.length - 1].id;
+    for (const week of ops.createWeeks) {
+      lastWeekId = (await tx.goalWeek.create({ data: { ...week, goalId: goal.id } })).id;
+    }
+    for (const { id: taskId, ...taskData } of ops.updateTasks) {
+      await tx.task.update({ where: { id: taskId }, data: taskData });
+    }
+    if (ops.milestone) {
+      const { id: taskId, date } = ops.milestone;
+      await tx.task.update({ where: { id: taskId }, data: { startDate: date, endDate: date, goalWeekId: lastWeekId } });
+    }
+    // Recién al final: borrar una semana borra sus tareas (cascade), así que
+    // antes hay que sacar de ellas todo lo que se conserva (tareas e hito)
+    await tx.goalWeek.deleteMany({ where: { id: { in: ops.deleteWeekIds } } });
+    return tx.goal.update({ where: { id: goal.id }, data: { deadline: data.deadline }, include: WEEKS_WITH_TASKS });
+  });
+
+  res.json(withProgress(updated, { keepTasks: true }));
 }

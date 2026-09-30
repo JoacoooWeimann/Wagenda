@@ -398,6 +398,55 @@ describe('cerrar y reabrir un objetivo', () => {
   });
 });
 
+describe('PUT /api/goals/:id/deadline', () => {
+  const change = (goal, deadline, today = '2026-10-01') =>
+    ctx.request('PUT', `/api/goals/${goal.id}/deadline`, { deadline, today });
+
+  it('extender un objetivo por fases agrega semanas y mueve el hito', async () => {
+    const goal = await createGoal(running());
+    const res = await change(goal, '2026-12-13');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.deadline, '2026-12-13T00:00:00.000Z');
+    assert.equal(res.body.weeks.length, 10);
+    assert.deepEqual(res.body.weeks.slice(-2).map(w => [w.label, w.target]), [['Evaluación', 3], ['Evaluación', 3]]);
+
+    const milestone = res.body.weeks.at(-1).tasks.find(t => t.kind === 'hito');
+    assert.equal(milestone.startDate, '2026-12-13T00:00:00.000Z');
+    assert.equal(res.body.weeks.flatMap(w => w.tasks).filter(t => t.kind === 'hito').length, 1);
+  });
+
+  it('acortar mueve las tareas de las semanas quitadas sin perder ninguna ni su estado', async () => {
+    const goal = await createGoal(algebra());
+    const unit6 = goal.weeks.flatMap(w => w.tasks).find(t => t.title === 'Unidad 6');
+    await ctx.request('PATCH', `/api/tasks/${unit6.id}`, { done: true });
+    const before = await ctx.prisma.task.count();
+
+    const res = await change(goal, '2026-10-25');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.weeks.length, 3);
+    assert.equal(await ctx.prisma.task.count(), before);
+
+    const last = res.body.weeks.at(-1);
+    const titles = last.tasks.map(t => t.title);
+    assert.ok(titles.includes('Unidad 6') && titles.includes('Repaso general'));
+    assert.equal(last.tasks.find(t => t.title === 'Unidad 6').done, true);
+    assert.ok(last.tasks.every(t => t.endDate <= '2026-10-25T00:00:00.000Z'));
+  });
+
+  it('valida el nuevo plazo', async () => {
+    const goal = await createGoal(running());
+    assert.match((await change(goal, '2026-10-10', '2026-10-20')).body.fields.deadline, /anterior a hoy/);
+    assert.match((await change(goal, '2026-10-01')).body.fields.deadline, /anterior al inicio/);
+    assert.match((await change(goal, '2026-11-29')).body.fields.deadline, /actual/);
+    assert.match((await change(goal, '2028-01-01')).body.fields.deadline, /52 semanas/);
+    assert.ok((await change(goal, '2026-12-13', 'hoy')).body.fields.today);
+    assert.equal((await change({ id: 9999 }, '2026-12-13')).status, 404);
+
+    await ctx.request('PATCH', `/api/goals/${goal.id}`, { status: 'logrado' });
+    assert.equal((await change(goal, '2026-12-13')).body.fields.status, 'El objetivo está cerrado');
+  });
+});
+
 describe('DELETE /api/goals/:id', () => {
   it('borra el objetivo, sus semanas y sus tareas (cascade), sin tocar tareas sueltas', async () => {
     const goal = await createGoal(algebra());

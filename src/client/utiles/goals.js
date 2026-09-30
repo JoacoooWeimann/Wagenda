@@ -151,3 +151,30 @@ export function calendarLink(goal, today) {
 }
 
 export const MAX_CONTENT_TYPES = 5;
+
+// Cuántas semanas (lunes a domingo) toca el rango [startKey, endKey]: misma
+// grilla que buildWeeks en el servidor
+export function weekCount(startKey, endKey) {
+  const weekday = new Date(`${startKey}T00:00:00Z`).getUTCDay();
+  const offset = (weekday + 6) % 7; // lunes=0 ... domingo=6
+  return Math.ceil((offset + daysBetweenKeys(startKey, endKey) + 1) / 7);
+}
+
+// Explica qué va a pasar con el plan al cambiar el plazo (misma regla que
+// resizePlan en el servidor, que es quien lo aplica)
+export function deadlineChangeNote(goal, newKey) {
+  const current = goal.weeks.length;
+  const next = weekCount(keyOf(goal.startDate), newKey);
+  if (next > current) {
+    const n = next - current;
+    const added = n === 1 ? 'Se agrega 1 semana' : `Se agregan ${n} semanas`;
+    return goal.strategy === 'fases'
+      ? `${added} de «${goal.weeks.at(-1).label}».`
+      : `${added} ${n === 1 ? 'libre' : 'libres'}, para completar con «Editar plan».`;
+  }
+  if (next < current) {
+    const n = current - next;
+    return `${n === 1 ? 'Se quita 1 semana' : `Se quitan ${n} semanas`}; sus tareas pasan a la semana ${next}.`;
+  }
+  return 'Cambia el fin de la última semana.';
+}

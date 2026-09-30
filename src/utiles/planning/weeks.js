@@ -1,5 +1,8 @@
 import { addDays, daysBetween } from '../dates.js';
 
+// Límite de un plan (al crearlo y al cambiarle el plazo)
+export const MAX_WEEKS = 52;
+
 // Divide [start, deadline] (fechas UTC a medianoche, ambos incluidos) en semanas
 // de lunes a domingo, como las filas del calendario. La primera y la última
 // pueden ser parciales; `days` (su capacidad) permite darles menos carga.

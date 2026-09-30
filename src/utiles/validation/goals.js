@@ -164,3 +164,20 @@ export function validateGoalUpdate(body = {}) {
 export function closedGoalError(goal) {
   return goal.status === 'activo' ? null : { status: 'El objetivo está cerrado' };
 }
+
+// Cambio de plazo: { deadline, today }. `today` lo manda el cliente (igual que el
+// inicio al crear): el servidor no sabe qué día es para el usuario. El nuevo
+// plazo no puede ser anterior a hoy (el pasado no se toca) ni al inicio.
+export function validateDeadlineChange(body = {}, goal) {
+  const fields = {};
+  const today = parseDateOnly(body.today);
+  if (!today) fields.today = 'Fecha inválida (formato YYYY-MM-DD)';
+
+  const deadline = parseDateOnly(body.deadline);
+  if (!deadline) fields.deadline = 'Fecha inválida (formato YYYY-MM-DD)';
+  else if (deadline < goal.startDate) fields.deadline = 'La fecha límite no puede ser anterior al inicio';
+  else if (today && deadline < today) fields.deadline = 'La fecha límite no puede ser anterior a hoy';
+  else if (deadline.getTime() === goal.deadline.getTime()) fields.deadline = 'Es la fecha límite actual';
+
+  return { data: hasErrors(fields) ? {} : { deadline }, fields };
+}
