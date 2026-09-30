@@ -56,6 +56,11 @@ export function validateGoalCreate(body = {}) {
   if (data.strategy === 'fases') {
     const sessionsPerWeek = intInRange(body.sessionsPerWeek, 1, 7, 'sessionsPerWeek', fields);
     if (sessionsPerWeek !== undefined) data.sessionsPerWeek = sessionsPerWeek;
+
+    // Seguimiento vinculado (opcional): solo en fases, que es donde hay sesiones.
+    // Que sea del usuario lo verifica el controller (necesita la base).
+    const trackerId = optionalTrackerId(body.trackerId, fields);
+    if (trackerId) data.trackerId = trackerId;
   }
 
   return { data, fields };
@@ -149,6 +154,13 @@ export function validateGoalUpdate(body = {}) {
     else fields.type = 'Tipo de objetivo inválido';
   }
 
+  // null desvincula. Que sea del usuario y que el objetivo sea por fases lo
+  // verifica el controller.
+  if (body.trackerId !== undefined) {
+    const trackerId = optionalTrackerId(body.trackerId, fields);
+    if (trackerId !== undefined) data.trackerId = trackerId;
+  }
+
   // Cerrar (logrado / abandonado) o reabrir (activo). closedAt lo pone el controller.
   if (body.status !== undefined) {
     if (GOAL_STATUSES.includes(body.status)) data.status = body.status;
@@ -180,4 +192,12 @@ export function validateDeadlineChange(body = {}, goal) {
   else if (deadline.getTime() === goal.deadline.getTime()) fields.deadline = 'Es la fecha límite actual';
 
   return { data: hasErrors(fields) ? {} : { deadline }, fields };
+}
+
+// id de seguimiento opcional: null o un entero positivo. Devuelve undefined si es inválido.
+function optionalTrackerId(value, fields) {
+  if (value === undefined || value === null) return value;
+  if (Number.isInteger(value) && value > 0) return value;
+  fields.trackerId = 'Seguimiento inválido';
+  return undefined;
 }

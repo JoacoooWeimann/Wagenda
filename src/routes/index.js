@@ -24,4 +24,8 @@ router.get('/goals', (req, res) => {
   res.render('goals', { title: 'Objetivos' });
 });
 
+router.get('/trackers', (req, res) => {
+  res.render('trackers', { title: 'Seguimientos' });
+});
+
 export default router;

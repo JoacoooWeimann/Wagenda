@@ -44,8 +44,9 @@ enum GoalStatus {
 model User {
   id    Int    @id @default(autoincrement())
   name  String @default("Invitado")
-  tasks Task[]
-  goals Goal[]
+  tasks    Task[]
+  goals    Goal[]
+  trackers Tracker[]
 }
 
 model Goal {
@@ -65,6 +66,11 @@ model Goal {
   user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId Int
   weeks  GoalWeek[]
+
+  // Seguimiento opcional: al registrar una sesión se puede cargar también una
+  // medición. SetNull: borrar el seguimiento no borra el objetivo.
+  tracker   Tracker? @relation(fields: [trackerId], references: [id], onDelete: SetNull)
+  trackerId Int?
 
   @@index([userId])
 }
@@ -108,4 +114,37 @@ model Task {
   // Cubre la consulta del mes (userId = ? AND startDate < ? ORDER BY startDate)
   // y, por empezar con userId, también las búsquedas por la foreign key
   @@index([userId, startDate])
+}
+
+// Algo que se mide en el tiempo, sin fecha límite (ej. "Press banca" en kg,
+// "Rating Premier" en pts). Un objetivo mide constancia (sesiones y cuotas);
+// un seguimiento mide rendimiento. Es lo que más adelante se comparte en grupos.
+model Tracker {
+  id             Int       @id @default(autoincrement())
+  name           String
+  unit           String?
+  higherIsBetter Boolean   @default(true) // en "5 km" (minutos), menos es mejor
+  type           GoalType?
+  createdAt      DateTime  @default(now())
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  Int
+  entries TrackerEntry[]
+  goals   Goal[]
+
+  @@index([userId])
+}
+
+model TrackerEntry {
+  id        Int      @id @default(autoincrement())
+  date      DateTime // fecha de calendario (medianoche UTC), como las tareas
+  value     Float
+  note      String?
+  createdAt DateTime @default(now())
+
+  tracker   Tracker @relation(fields: [trackerId], references: [id], onDelete: Cascade)
+  trackerId Int
+
+  // Historial de un seguimiento ordenado por fecha
+  @@index([trackerId, date])
 }

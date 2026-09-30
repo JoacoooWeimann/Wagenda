@@ -10,8 +10,17 @@ import { generatePlan, resizePlan, PlanError, milestoneTitle } from '../utiles/p
 import { TYPE_LABELS } from '../utiles/planning/templates.js';
 import { parseDateOnly } from '../utiles/dates.js';
 import { TASK_WITH_GOAL } from '../utiles/queries.js';
+import { validateEntry } from '../utiles/validation/trackers.js';
 
 const GOAL_NOT_FOUND = 'Objetivo no encontrado';
+
+// Un objetivo solo se vincula a un seguimiento propio. Devuelve los errores por
+// campo, o null si está bien (o no se pidió vincular).
+async function trackerError(trackerId, userId) {
+  if (!trackerId) return null;
+  const tracker = await prisma.tracker.findFirst({ where: { id: trackerId, userId } });
+  return tracker ? null : { trackerId: 'Seguimiento no encontrado' };
+}
 
 // Valida y genera el plan. Devuelve { goal, plan } o { fields } si algo es inválido.
 // Un PlanError (ej. plazo corto para "fases") es un error de datos esperable: se
@@ -55,7 +64,11 @@ function withProgress(goal, { keepTasks }) {
   return { ...goal, weeks, progress };
 }
 
-const WEEKS_WITH_TASKS = {
+// El seguimiento vinculado viaja con el objetivo: la UI muestra su nombre y unidad
+const LINKED_TRACKER = { tracker: { select: { id: true, name: true, unit: true } } };
+
+const GOAL_WITH_PLAN = {
+  ...LINKED_TRACKER,
   weeks: { orderBy: { number: 'asc' }, include: { tasks: { orderBy: { startDate: 'asc' } } } }
 };
 
@@ -71,6 +84,9 @@ export async function createGoal(req, res) {
   if (fields) return invalid(res, fields);
 
   const userId = currentUserId(req);
+  const badTracker = await trackerError(goal.trackerId, userId);
+  if (badTracker) return invalid(res, badTracker);
+
   // Los parámetros de generación no se guardan: una vez creado, el plan es editable
   // y la fuente de verdad son sus semanas y tareas
   const { reviewWeek, contents, sessionsPerWeek, ...goalData } = goal;
@@ -92,7 +108,7 @@ export async function createGoal(req, res) {
         }))
       }
     },
-    include: WEEKS_WITH_TASKS
+    include: GOAL_WITH_PLAN
   });
 
   res.status(201).json(withProgress(created, { keepTasks: true }));
@@ -103,6 +119,7 @@ export async function listGoals(req, res) {
     where: { userId: currentUserId(req) },
     orderBy: { deadline: 'asc' },
     include: {
+      ...LINKED_TRACKER,
       weeks: {
         orderBy: { number: 'asc' },
         include: { tasks: { select: { done: true, kind: true } } }
@@ -121,7 +138,7 @@ export async function getGoal(req, res) {
 
   const goal = await prisma.goal.findFirst({
     where: { id, userId: currentUserId(req) },
-    include: WEEKS_WITH_TASKS
+    include: GOAL_WITH_PLAN
   });
   if (!goal) return notFound(res, GOAL_NOT_FOUND);
 
@@ -139,8 +156,15 @@ export async function updateGoal(req, res) {
   if (hasErrors(fields)) return invalid(res, fields);
   if (error) return res.status(400).json({ error });
 
-  const goal = await prisma.goal.findFirst({ where: { id, userId: currentUserId(req) } });
+  const userId = currentUserId(req);
+  const goal = await prisma.goal.findFirst({ where: { id, userId } });
   if (!goal) return notFound(res, GOAL_NOT_FOUND);
+
+  if (data.trackerId && goal.strategy !== 'fases') {
+    return invalid(res, { trackerId: 'Solo los objetivos por fases se vinculan a un seguimiento' });
+  }
+  const badTracker = await trackerError(data.trackerId, userId);
+  if (badTracker) return invalid(res, badTracker);
 
   // Al cerrar se guarda cuándo; al reabrir se borra. Cambiar entre logrado y
   // abandonado no mueve la fecha de cierre.
@@ -155,7 +179,7 @@ export async function updateGoal(req, res) {
     if (data.type && data.type !== goal.type) {
       await tx.task.updateMany({ where: goalTasks, data: { category: TYPE_LABELS[data.type] } });
     }
-    return tx.goal.update({ where: { id: goal.id }, data, include: WEEKS_WITH_TASKS });
+    return tx.goal.update({ where: { id: goal.id }, data, include: GOAL_WITH_PLAN });
   });
 
   res.json(withProgress(updated, { keepTasks: true }));
@@ -175,12 +199,16 @@ export async function deleteGoal(req, res) {
 // Registra una sesión de un objetivo por fases el día que se hizo. Es una Task
 // ya hecha, en esa fecha y vinculada a la semana que la contiene: así aparece en
 // el calendario y se borra/desmarca como cualquier otra tarea.
+// Si el objetivo tiene seguimiento, puede traer además una medición ({ value,
+// note }), que se guarda como registro del seguimiento en la misma transacción.
+// Son hechos distintos (constancia y rendimiento): borrar la sesión no borra el registro.
 export async function logSession(req, res) {
   const id = parseId(req.params.id);
   if (!id) return invalid(res, { id: 'id inválido' });
 
-  const date = parseDateOnly(req.body?.date);
-  if (!date) return invalid(res, { date: 'Fecha inválida (formato YYYY-MM-DD)' });
+  const { data: entry, fields } = validateEntry(req.body, { valueRequired: false });
+  if (hasErrors(fields)) return invalid(res, fields);
+  const { date } = entry;
 
   const userId = currentUserId(req);
   const goal = await prisma.goal.findFirst({ where: { id, userId } });
@@ -190,25 +218,32 @@ export async function logSession(req, res) {
   if (goal.strategy !== 'fases') {
     return invalid(res, { strategy: 'Solo los objetivos por fases registran sesiones' });
   }
+  const measured = entry.value !== undefined;
+  if (measured && !goal.trackerId) {
+    return invalid(res, { value: 'El objetivo no tiene un seguimiento vinculado' });
+  }
 
   const week = await prisma.goalWeek.findFirst({
     where: { goalId: goal.id, startDate: { lte: date }, endDate: { gte: date } }
   });
   if (!week) return invalid(res, { date: 'La fecha está fuera del plazo del objetivo' });
 
-  const session = await prisma.task.create({
-    data: {
-      title: `${week.label} · sesión`,
-      startDate: date,
-      endDate: date,
-      done: true,
-      kind: 'sesion',
-      category: TYPE_LABELS[goal.type],
-      userId,
-      goalWeekId: week.id
-    },
-    include: TASK_WITH_GOAL
-  });
+  const [session] = await prisma.$transaction([
+    prisma.task.create({
+      data: {
+        title: `${week.label} · sesión`,
+        startDate: date,
+        endDate: date,
+        done: true,
+        kind: 'sesion',
+        category: TYPE_LABELS[goal.type],
+        userId,
+        goalWeekId: week.id
+      },
+      include: TASK_WITH_GOAL
+    }),
+    ...(measured ? [prisma.trackerEntry.create({ data: { ...entry, trackerId: goal.trackerId } })] : [])
+  ]);
   res.status(201).json(session);
 }
 
@@ -256,7 +291,7 @@ export async function updateWeek(req, res) {
   }
 
   // Devuelve el objetivo completo: la UI refresca el plan y el progreso de una vez
-  const updated = await prisma.goal.findUnique({ where: { id: goal.id }, include: WEEKS_WITH_TASKS });
+  const updated = await prisma.goal.findUnique({ where: { id: goal.id }, include: GOAL_WITH_PLAN });
   res.json(withProgress(updated, { keepTasks: true }));
 }
 
@@ -296,7 +331,7 @@ export async function changeDeadline(req, res) {
 
   const goal = await prisma.goal.findFirst({
     where: { id, userId: currentUserId(req) },
-    include: WEEKS_WITH_TASKS
+    include: GOAL_WITH_PLAN
   });
   if (!goal) return notFound(res, GOAL_NOT_FOUND);
   const closed = closedGoalError(goal);
@@ -332,7 +367,7 @@ export async function changeDeadline(req, res) {
     // Recién al final: borrar una semana borra sus tareas (cascade), así que
     // antes hay que sacar de ellas todo lo que se conserva (tareas e hito)
     await tx.goalWeek.deleteMany({ where: { id: { in: ops.deleteWeekIds } } });
-    return tx.goal.update({ where: { id: goal.id }, data: { deadline: data.deadline }, include: WEEKS_WITH_TASKS });
+    return tx.goal.update({ where: { id: goal.id }, data: { deadline: data.deadline }, include: GOAL_WITH_PLAN });
   });
 
   res.json(withProgress(updated, { keepTasks: true }));
