@@ -6,6 +6,7 @@ import { TYPE_LABELS, DEFAULT_STRATEGY } from '../planning/templates.js';
 
 export const GOAL_TYPES = Object.keys(TYPE_LABELS);
 export const STRATEGIES = ['divisible', 'fases'];
+export const GOAL_STATUSES = ['activo', 'logrado', 'abandonado'];
 export const GOAL_LIMITS = { title: 100, description: 1000, contentTypes: 5, contentName: 30, contentCount: 100 };
 
 export function validateGoalCreate(body = {}) {
@@ -148,6 +149,18 @@ export function validateGoalUpdate(body = {}) {
     else fields.type = 'Tipo de objetivo inválido';
   }
 
+  // Cerrar (logrado / abandonado) o reabrir (activo). closedAt lo pone el controller.
+  if (body.status !== undefined) {
+    if (GOAL_STATUSES.includes(body.status)) data.status = body.status;
+    else fields.status = 'Estado inválido';
+  }
+
   const error = !hasErrors(fields) && Object.keys(data).length === 0 ? 'No hay campos para actualizar' : undefined;
   return { data, fields, error };
+}
+
+// Un objetivo cerrado es de solo lectura: su plan, sesiones y tareas no cambian
+// hasta que se reabra. Devuelve los errores por campo, o null si está abierto.
+export function closedGoalError(goal) {
+  return goal.status === 'activo' ? null : { status: 'El objetivo está cerrado' };
 }

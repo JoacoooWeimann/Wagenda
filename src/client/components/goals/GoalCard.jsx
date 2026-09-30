@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { getGoal, updateGoal, updateTask, deleteTask, logSession, updateWeek, addWeekTask } from '../../utiles/api.js';
 import {
   typeLabel, goalStatus, deadlineText, dayMonth, withWeekDone, progressFromWeeks,
-  paceOf, percent, countNoun, calendarLink
+  paceOf, percent, countNoun, calendarLink, isClosed
 } from '../../utiles/goals.js';
 import PlanWeeks from './PlanWeeks.jsx';
 import GoalInfoForm from './GoalInfoForm.jsx';
@@ -23,6 +23,7 @@ export default function GoalCard({ goal, today, onChange, onDelete, onError }) {
   const pace = paceOf(weeks, today);
   const status = goalStatus(goal, today);
   const isFases = goal.strategy === 'fases';
+  const closed = isClosed(goal); // solo lectura hasta que se reabra
   const noun = (n) => countNoun(goal.strategy, n);
 
   // Última fecha en la que se puede registrar: hoy, o la fecha límite si ya pasó
@@ -102,6 +103,15 @@ export default function GoalCard({ goal, today, onChange, onDelete, onError }) {
     if (detail) setDetail(updated);
   }
 
+  async function changeStatus(newStatus) {
+    try {
+      applyGoal(await updateGoal(goal.id, { status: newStatus }));
+      if (newStatus !== 'activo') setEditing(false);
+    } catch (err) {
+      onError(`No se pudo cambiar el estado: ${err.message}`);
+    }
+  }
+
   async function saveInfo(changes) {
     applyGoal(await updateGoal(goal.id, changes)); // si falla, GoalInfoForm muestra los errores
     setEditingInfo(false);
@@ -149,7 +159,7 @@ export default function GoalCard({ goal, today, onChange, onDelete, onError }) {
         )}
       </p>
 
-      {isFases && status.kind !== 'upcoming' && (
+      {isFases && !closed && status.kind !== 'upcoming' && (
         <form className="goal-session-form" onSubmit={registerSession}>
           <input
             type="date" value={sessionDate} aria-label="Fecha de la sesión"
@@ -166,13 +176,21 @@ export default function GoalCard({ goal, today, onChange, onDelete, onError }) {
         <button type="button" className="goal-btn" onClick={toggleOpen} aria-expanded={open}>
           {open ? 'Ocultar plan ▴' : 'Ver plan ▾'}
         </button>
-        {open && (
+        {open && !closed && (
           <button type="button" className={editing ? 'goal-btn-primary' : 'goal-btn'} onClick={() => setEditing(e => !e)}>
             {editing ? 'Listo' : 'Editar plan'}
           </button>
         )}
         <a className="goal-btn" href={calendarLink(goal, today)}>Ver en calendario</a>
         {!editingInfo && <button type="button" className="goal-btn" onClick={() => setEditingInfo(true)}>Editar datos</button>}
+        {closed ? (
+          <button type="button" className="goal-btn" onClick={() => changeStatus('activo')}>Reabrir</button>
+        ) : (
+          <>
+            <button type="button" className="goal-btn" onClick={() => changeStatus('logrado')}>✔ Logrado</button>
+            <button type="button" className="goal-btn" onClick={() => changeStatus('abandonado')}>Abandonar</button>
+          </>
+        )}
         {confirmingDelete ? (
           <span className="goal-confirm">
             ¿Borrar el objetivo y sus tareas?
@@ -189,9 +207,9 @@ export default function GoalCard({ goal, today, onChange, onDelete, onError }) {
           weeks={weeks}
           strategy={goal.strategy}
           today={today}
-          onToggle={toggleTask}
-          onDeleteSession={removeSession}
-          edit={editing ? edit : null}
+          onToggle={closed ? undefined : toggleTask}
+          onDeleteSession={closed ? undefined : removeSession}
+          edit={editing && !closed ? edit : null}
         />
       )}
     </article>

@@ -1,7 +1,7 @@
 import prisma from '../utiles/db.js';
 import { invalid, notFound } from '../utiles/responses.js';
 import { hasErrors, parseId } from '../utiles/validation/common.js';
-import { validateGoalCreate, validateGoalUpdate, validateWeekUpdate } from '../utiles/validation/goals.js';
+import { validateGoalCreate, validateGoalUpdate, validateWeekUpdate, closedGoalError } from '../utiles/validation/goals.js';
 import { requiredText } from '../utiles/validation/common.js';
 import { currentUserId } from '../utiles/currentUser.js';
 import { generatePlan, PlanError, milestoneTitle } from '../utiles/planning/index.js';
@@ -140,6 +140,11 @@ export async function updateGoal(req, res) {
   const goal = await prisma.goal.findFirst({ where: { id, userId: currentUserId(req) } });
   if (!goal) return notFound(res, GOAL_NOT_FOUND);
 
+  // Al cerrar se guarda cuándo; al reabrir se borra. Cambiar entre logrado y
+  // abandonado no mueve la fecha de cierre.
+  if (data.status === 'activo') data.closedAt = null;
+  else if (data.status && goal.status === 'activo') data.closedAt = new Date();
+
   const goalTasks = { goalWeek: { goalId: goal.id } };
   const updated = await prisma.$transaction(async (tx) => {
     if (data.title && data.title !== goal.title) {
@@ -178,6 +183,8 @@ export async function logSession(req, res) {
   const userId = currentUserId(req);
   const goal = await prisma.goal.findFirst({ where: { id, userId } });
   if (!goal) return notFound(res, GOAL_NOT_FOUND);
+  const closed = closedGoalError(goal);
+  if (closed) return invalid(res, closed);
   if (goal.strategy !== 'fases') {
     return invalid(res, { strategy: 'Solo los objetivos por fases registran sesiones' });
   }
@@ -203,8 +210,9 @@ export async function logSession(req, res) {
   res.status(201).json(session);
 }
 
-// Busca objetivo + semana del usuario a partir de la URL. Devuelve { goal, week }
-// o la respuesta de error ya enviada (null).
+// Busca objetivo + semana del usuario a partir de la URL, para editar el plan.
+// Devuelve { goal, week } o la respuesta de error ya enviada (null). Un objetivo
+// cerrado no se edita.
 async function findGoalWeek(req, res) {
   const id = parseId(req.params.id);
   const weekId = parseId(req.params.weekId);
@@ -216,6 +224,11 @@ async function findGoalWeek(req, res) {
   const week = goal && await prisma.goalWeek.findFirst({ where: { id: weekId, goalId: goal.id } });
   if (!week) {
     notFound(res, goal ? 'Semana no encontrada' : GOAL_NOT_FOUND);
+    return null;
+  }
+  const closed = closedGoalError(goal);
+  if (closed) {
+    invalid(res, closed);
     return null;
   }
   return { goal, week };

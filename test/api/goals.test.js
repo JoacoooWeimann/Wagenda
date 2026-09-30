@@ -79,7 +79,7 @@ describe('POST /api/goals', () => {
     const goal = await createGoal(algebra());
     const october = await monthTasks(2026, 10);
     const unit = october.find(t => t.title === 'Unidad 1');
-    assert.deepEqual(unit.goalWeek, { number: 1, goal: { id: goal.id, title: 'Álgebra', strategy: 'divisible' } });
+    assert.deepEqual(unit.goalWeek, { number: 1, goal: { id: goal.id, title: 'Álgebra', strategy: 'divisible', status: 'activo' } });
 
     const patched = await ctx.request('PATCH', `/api/tasks/${unit.id}`, { done: true });
     assert.equal(patched.body.goalWeek.goal.title, 'Álgebra');
@@ -340,6 +340,61 @@ describe('PATCH /api/goals/:id', () => {
     assert.ok(bad.body.fields.title);
     assert.ok(bad.body.fields.type);
     assert.equal((await ctx.request('PATCH', '/api/goals/9999', { title: 'x' })).status, 404);
+  });
+});
+
+describe('cerrar y reabrir un objetivo', () => {
+  it('guarda el estado y la fecha de cierre; al reabrir la borra', async () => {
+    const goal = await createGoal(running());
+    const done = await ctx.request('PATCH', `/api/goals/${goal.id}`, { status: 'logrado' });
+    assert.equal(done.status, 200);
+    assert.equal(done.body.status, 'logrado');
+    assert.ok(done.body.closedAt);
+
+    const reopened = await ctx.request('PATCH', `/api/goals/${goal.id}`, { status: 'activo' });
+    assert.equal(reopened.body.status, 'activo');
+    assert.equal(reopened.body.closedAt, null);
+
+    assert.equal((await ctx.request('PATCH', `/api/goals/${goal.id}`, { status: 'x' })).status, 400);
+  });
+
+  it('un objetivo cerrado es de solo lectura', async () => {
+    const goal = await createGoal(algebra());
+    const [week] = goal.weeks;
+    const [task] = week.tasks;
+    const fases = await createGoal(running());
+    await ctx.request('PATCH', `/api/goals/${goal.id}`, { status: 'abandonado' });
+    await ctx.request('PATCH', `/api/goals/${fases.id}`, { status: 'abandonado' });
+
+    const attempts = [
+      ctx.request('POST', `/api/goals/${fases.id}/sessions`, { date: '2026-10-06' }),
+      ctx.request('PATCH', `/api/goals/${goal.id}/weeks/${week.id}`, { label: 'Otra' }),
+      ctx.request('POST', `/api/goals/${goal.id}/weeks/${week.id}/tasks`, { title: 'Extra' }),
+      ctx.request('PATCH', `/api/tasks/${task.id}`, { done: true }),
+      ctx.request('DELETE', `/api/tasks/${task.id}`)
+    ];
+    for (const res of await Promise.all(attempts)) {
+      assert.equal(res.status, 400);
+      assert.equal(res.body.fields.status, 'El objetivo está cerrado');
+    }
+    // los datos básicos sí se pueden editar (ej. corregir el título)
+    assert.equal((await ctx.request('PATCH', `/api/goals/${goal.id}`, { title: 'Otro' })).status, 200);
+  });
+
+  it('el calendario oculta lo pendiente de un objetivo cerrado y muestra lo hecho', async () => {
+    const goal = await createGoal(algebra());
+    const [done, pending] = goal.weeks[0].tasks;
+    await ctx.request('PATCH', `/api/tasks/${done.id}`, { done: true });
+    const loose = await ctx.request('POST', '/api/tasks', { title: 'Suelta', startDate: '2026-10-06' });
+
+    await ctx.request('PATCH', `/api/goals/${goal.id}`, { status: 'abandonado' });
+    const ids = (await monthTasks(2026, 10)).map(t => t.id);
+    assert.ok(ids.includes(done.id));
+    assert.ok(ids.includes(loose.body.id));
+    assert.ok(!ids.includes(pending.id));
+
+    await ctx.request('PATCH', `/api/goals/${goal.id}`, { status: 'activo' });
+    assert.ok((await monthTasks(2026, 10)).some(t => t.id === pending.id));
   });
 });
 

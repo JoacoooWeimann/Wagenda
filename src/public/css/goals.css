@@ -375,3 +375,4 @@ a.goal-btn { text-decoration: none; display: inline-block; }
 /* Edición de datos básicos y descripción */
 .goal-info-form { margin: 8px 0 12px; }
 .goal-description { margin: 4px 0; color: #555; font-size: 0.9rem; white-space: pre-line; }
+.goal-status-closed { color: #555; font-weight: 500; }

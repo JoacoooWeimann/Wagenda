@@ -108,11 +108,13 @@ describe('validateGoalUpdate', () => {
     assert.deepEqual(validateGoalUpdate({ title: ' Nuevo ' }), { data: { title: 'Nuevo' }, fields: {}, error: undefined });
     assert.deepEqual(validateGoalUpdate({ description: '' }).data, { description: null });
     assert.deepEqual(validateGoalUpdate({ type: 'fisico' }).data, { type: 'fisico' });
+    assert.deepEqual(validateGoalUpdate({ status: 'logrado' }).data, { status: 'logrado' });
   });
 
   it('rechaza título vacío, tipo inválido y cuerpo sin campos editables', () => {
     assert.ok(validateGoalUpdate({ title: '  ' }).fields.title);
     assert.ok(validateGoalUpdate({ type: 'x' }).fields.type);
+    assert.ok(validateGoalUpdate({ status: 'cerrado' }).fields.status);
     assert.ok(validateGoalUpdate({}).error);
     assert.ok(validateGoalUpdate({ strategy: 'fases' }).error); // la estrategia no se edita
   });

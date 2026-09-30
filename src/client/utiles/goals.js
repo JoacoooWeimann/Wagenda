@@ -33,12 +33,22 @@ export function daysBetweenKeys(fromKey, toKey) {
   return Math.round((utc(toKey) - utc(fromKey)) / 86400000);
 }
 
+// Día (local) en que se cerró el objetivo. closedAt es un instante, no una
+// fecha de calendario: se pasa a la fecha de la computadora del usuario.
+export const closedKey = (goal) => todayKey(new Date(goal.closedAt));
+
+export const isClosed = (goal) => goal.status !== undefined && goal.status !== 'activo';
+
 // En qué punto del plan está el objetivo hoy
 export function goalStatus(goal, today) {
   const start = keyOf(goal.startDate);
   const deadline = keyOf(goal.deadline);
+  if (isClosed(goal)) {
+    const text = goal.status === 'logrado' ? `✔ Logrado el ${dayMonth(closedKey(goal))}` : 'Abandonado';
+    return { kind: 'closed', text };
+  }
   if (today < start) return { kind: 'upcoming', text: `Empieza el ${dayMonth(goal.startDate)}` };
-  if (today > deadline) return { kind: 'finished', text: 'Finalizado' };
+  if (today > deadline) return { kind: 'finished', text: 'Terminó el plazo · ¿lo lograste?' };
 
   const week = goal.weeks.find(w => keyOf(w.startDate) <= today && today <= keyOf(w.endDate));
   const text = week ? `Semana ${week.number} de ${goal.weeks.length} · ${week.label}` : '';
@@ -128,10 +138,15 @@ export function buildGoalPayload(form) {
 }
 
 // Link al calendario en el mes más útil: el actual si el objetivo está en curso,
-// el de inicio si todavía no empezó, el de la fecha límite si ya terminó
+// el de inicio si todavía no empezó, el de la fecha límite si ya terminó, y el
+// del cierre (dentro del plazo) si se cerró
 export function calendarLink(goal, today) {
   const { kind } = goalStatus(goal, today);
-  const key = kind === 'upcoming' ? goal.startDate : kind === 'finished' ? goal.deadline : today;
+  let key = kind === 'upcoming' ? goal.startDate : kind === 'finished' ? goal.deadline : today;
+  if (kind === 'closed') {
+    const closed = closedKey(goal);
+    key = [keyOf(goal.startDate), closed, keyOf(goal.deadline)].sort()[1]; // el del medio: dentro del plazo
+  }
   return `/calendar?year=${Number(key.slice(0, 4))}&month=${Number(key.slice(5, 7))}`;
 }
 

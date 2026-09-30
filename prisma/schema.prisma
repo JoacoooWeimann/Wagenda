@@ -33,6 +33,14 @@ enum TaskKind {
   hito
 }
 
+// activo: en curso (aunque haya pasado la fecha límite) · logrado / abandonado:
+// cerrado por el usuario. Cerrar es reversible y no borra nada.
+enum GoalStatus {
+  activo
+  logrado
+  abandonado
+}
+
 model User {
   id    Int    @id @default(autoincrement())
   name  String @default("Invitado")
@@ -48,6 +56,8 @@ model Goal {
   strategy    PlanStrategy
   startDate   DateTime
   deadline    DateTime
+  status      GoalStatus   @default(activo)
+  closedAt    DateTime?
   // Los parámetros de generación (contenidos, sesiones por semana, repaso) no se
   // guardan: el plan es editable, así que la fuente de verdad son sus semanas y tareas.
   createdAt   DateTime     @default(now())
