@@ -1,13 +1,15 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateTrackerCreate, validateTrackerUpdate, validateEntry } from '../../src/utiles/validation/trackers.js';
+import {
+  validateTrackerCreate, validateTrackerUpdate, validateEntry, validateBoardCreate, validateBoardUpdate
+} from '../../src/utiles/validation/trackers.js';
 import { trackerSummary } from '../../src/utiles/trackers.js';
 
 describe('validateTrackerCreate / validateTrackerUpdate', () => {
   it('acepta nombre y campos opcionales', () => {
-    const { data, fields } = validateTrackerCreate({ name: ' Rating Premier ', unit: 'pts', higherIsBetter: true, type: 'videojuego' });
+    const { data, fields } = validateTrackerCreate({ name: ' Rating Premier ', unit: 'pts', higherIsBetter: true, boardId: 2 });
     assert.deepEqual(fields, {});
-    assert.deepEqual(data, { name: 'Rating Premier', unit: 'pts', higherIsBetter: true, type: 'videojuego' });
+    assert.deepEqual(data, { name: 'Rating Premier', unit: 'pts', higherIsBetter: true, boardId: 2 });
   });
 
   it('el nombre es obligatorio al crear y opcional al editar', () => {
@@ -16,12 +18,12 @@ describe('validateTrackerCreate / validateTrackerUpdate', () => {
     assert.ok(validateTrackerUpdate({}).error);
   });
 
-  it('rechaza textos largos, tipos inválidos y booleanos que no lo son', () => {
+  it('rechaza textos largos, tableros inválidos y booleanos que no lo son', () => {
     assert.ok(validateTrackerCreate({ name: 'x'.repeat(41) }).fields.name);
     assert.ok(validateTrackerCreate({ name: 'a', unit: 'x'.repeat(11) }).fields.unit);
-    assert.ok(validateTrackerCreate({ name: 'a', type: 'deporte' }).fields.type);
+    assert.ok(validateTrackerCreate({ name: 'a', boardId: 0 }).fields.boardId);
     assert.ok(validateTrackerCreate({ name: 'a', higherIsBetter: 1 }).fields.higherIsBetter);
-    assert.deepEqual(validateTrackerUpdate({ type: null }).data, { type: null }); // null quita la categoría
+    assert.deepEqual(validateTrackerUpdate({ boardId: null }).data, { boardId: null }); // null lo saca del tablero
   });
 });
 
@@ -64,5 +66,19 @@ describe('trackerSummary', () => {
 
   it('sin registros', () => {
     assert.deepEqual(trackerSummary([], true), { count: 0, last: null, best: null, change: null });
+  });
+});
+
+describe('validateBoardCreate / validateBoardUpdate', () => {
+  it('nombre obligatorio al crear, descripción opcional', () => {
+    assert.deepEqual(validateBoardCreate({ name: ' Gimnasio ', description: '' }).data, { name: 'Gimnasio', description: null });
+    assert.ok(validateBoardCreate({}).fields.name);
+    assert.ok(validateBoardCreate({ name: 'x'.repeat(41) }).fields.name);
+    assert.ok(validateBoardCreate({ name: 'a', description: 'x'.repeat(201) }).fields.description);
+  });
+
+  it('al editar, solo lo que viene', () => {
+    assert.deepEqual(validateBoardUpdate({ description: 'Fuerza' }).data, { description: 'Fuerza' });
+    assert.ok(validateBoardUpdate({}).error);
   });
 });

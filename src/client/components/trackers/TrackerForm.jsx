@@ -1,16 +1,16 @@
 import { useState } from 'react';
-import { GOAL_TYPES } from '../../utiles/goals.js';
 import { buildTrackerPayload } from '../../utiles/trackers.js';
 import { FieldError } from '../common.jsx';
 
-// Crear o editar un seguimiento. `onSave(payload)` devuelve una promesa que
-// rechaza con los errores por campo del servidor.
-export default function TrackerForm({ tracker, onSave, onCancel }) {
+// Crear o editar un seguimiento. `boardId` es el tablero donde se crea (null =
+// sin tablero); al editar, el select permite moverlo. `onSave(payload)` devuelve
+// una promesa que rechaza con los errores por campo del servidor.
+export default function TrackerForm({ tracker, boards = [], boardId = null, onSave, onCancel }) {
   const [form, setForm] = useState({
     name: tracker?.name ?? '',
     unit: tracker?.unit ?? '',
     higherIsBetter: tracker?.higherIsBetter ?? true,
-    type: tracker?.type ?? ''
+    boardId: String((tracker ? tracker.boardId : boardId) ?? '')
   });
   const [fieldErrors, setFieldErrors] = useState({});
   const [busy, setBusy] = useState(false);
@@ -55,12 +55,12 @@ export default function TrackerForm({ tracker, onSave, onCancel }) {
             <option value="menos">Menos (tiempo)</option>
           </select>
         </label>
-        <label>Categoría
-          <select className={invalid('type')} value={form.type} onChange={(e) => updateField('type', e.target.value)}>
-            <option value="">Sin categoría</option>
-            {GOAL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+        <label>Tablero
+          <select className={invalid('boardId')} value={form.boardId} onChange={(e) => updateField('boardId', e.target.value)}>
+            <option value="">Sin tablero</option>
+            {boards.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
           </select>
-          <FieldError message={fieldErrors.type} />
+          <FieldError message={fieldErrors.boardId} />
         </label>
       </div>
       <div className="goal-actions">

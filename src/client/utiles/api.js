@@ -50,6 +50,11 @@ export const logSession = (goalId, date, value) => request('POST', `/api/goals/$
 export const updateWeek = (goalId, weekId, changes) => request('PATCH', `/api/goals/${goalId}/weeks/${weekId}`, changes);
 export const addWeekTask = (goalId, weekId, title) => request('POST', `/api/goals/${goalId}/weeks/${weekId}/tasks`, { title });
 
+export const getBoards = () => request('GET', '/api/boards');
+export const createBoard = (board) => request('POST', '/api/boards', board);
+export const updateBoard = (id, changes) => request('PATCH', `/api/boards/${id}`, changes);
+export const deleteBoard = (id) => request('DELETE', `/api/boards/${id}`);
+
 export const getTrackers = () => request('GET', '/api/trackers');
 export const getTracker = (id) => request('GET', `/api/trackers/${id}`);
 export const createTracker = (tracker) => request('POST', '/api/trackers', tracker);

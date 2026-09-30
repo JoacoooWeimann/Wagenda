@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { addEntry, deleteEntry, updateTracker } from '../../utiles/api.js';
-import { typeLabel, dayMonth } from '../../utiles/goals.js';
+import { dayMonth } from '../../utiles/goals.js';
 import { formatValue, changeInfo } from '../../utiles/trackers.js';
 import { FieldError } from '../common.jsx';
 import Sparkline from './Sparkline.jsx';
@@ -9,7 +9,7 @@ import TrackerForm from './TrackerForm.jsx';
 // Un seguimiento: resumen (último, mejor marca, variación), evolución, carga
 // rápida de un registro e historial. Cada cambio devuelve o recarga el
 // seguimiento desde el servidor, que es quien calcula el resumen.
-export default function TrackerCard({ tracker, today, onChange, onReload, onDelete, onError }) {
+export default function TrackerCard({ tracker, boards, today, onChange, onReload, onDelete, onError }) {
   const [entry, setEntry] = useState({ date: today, value: '', note: '' });
   const [entryErrors, setEntryErrors] = useState({});
   const [busy, setBusy] = useState(false);
@@ -59,11 +59,10 @@ export default function TrackerCard({ tracker, today, onChange, onReload, onDele
     <article className="goal-card">
       <div className="goal-card-header">
         <h3>{tracker.name}</h3>
-        {tracker.type && <span className="goal-type">{typeLabel(tracker.type)}</span>}
       </div>
 
       {editing ? (
-        <TrackerForm tracker={tracker} onSave={saveEdit} onCancel={() => setEditing(false)} />
+        <TrackerForm tracker={tracker} boards={boards} onSave={saveEdit} onCancel={() => setEditing(false)} />
       ) : summary.count === 0 ? (
         <p className="goal-meta">Todavía no hay registros. Cargá el primero.</p>
       ) : (

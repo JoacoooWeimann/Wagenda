@@ -104,6 +104,7 @@ no saben nada de HTTP ni de la base.
 ```
 User ─┬─< Task                       (tareas sueltas)
       ├─< Goal ─< GoalWeek ─< Task   (tareas de un plan)
+      ├─< Board ─○< Tracker          (tableros; un seguimiento está en uno o en ninguno)
       └─< Tracker ─< TrackerEntry    (seguimientos y sus registros)
           Goal >─○ Tracker           (vínculo opcional, solo objetivos por fases)
 ```
@@ -113,7 +114,8 @@ User ─┬─< Task                       (tareas sueltas)
 | `Task` | `title`, `startDate`/`endDate`, `priority`, `category`, `done`, `kind`, `goalWeekId?` |
 | `Goal` | `title`, `type` (académico, físico, videojuego, profesional), `strategy` (divisible, fases), `startDate`, `deadline`, `status` (activo, logrado, abandonado), `closedAt?`, `trackerId?` |
 | `GoalWeek` | `number`, `startDate`/`endDate`, `label` (ej. "Unidad 3 · TP 2", "Intensidad"), `target` (cuota) |
-| `Tracker` | `name`, `unit?`, `higherIsBetter`, `type?` |
+| `Board` | `name`, `description?` |
+| `Tracker` | `name`, `unit?`, `higherIsBetter`, `boardId?` |
 | `TrackerEntry` | `date`, `value`, `note?` |
 
 - Las tareas de un plan **son `Task` comunes**: aparecen en el calendario y se
@@ -124,7 +126,9 @@ User ─┬─< Task                       (tareas sueltas)
   no puede quedar una tarea con un objetivo y una semana que no se corresponden.
 - Todo tiene `onDelete: Cascade`: borrar un objetivo borra sus semanas y sus
   tareas, y borrar un seguimiento borra sus registros. La excepción es
-  `Goal.trackerId` (`SetNull`): borrar un seguimiento no borra el objetivo.
+  `Goal.trackerId` y `Tracker.boardId` (`SetNull`): borrar un seguimiento no
+  borra el objetivo, y borrar un tablero no borra sus seguimientos (pasan a
+  "Sin tablero").
 
 ## Objetivos y planificación
 
@@ -240,6 +244,12 @@ registros; la mejor marca depende de `higherIsBetter` (en 5 km, menos es mejor).
   casos especiales. Además, los seguimientos son la base para compartir
   progreso en grupos (ver Roadmap): así hay **un único lugar para las
   mediciones**, y lo compartido nunca tiene fecha límite.
+- **Tableros:** agrupan seguimientos relacionados ("Gimnasio": press banca,
+  sentadilla; "CS2": rating, K/D). Un seguimiento está en un solo tablero o en
+  ninguno (1-N): así, al compartir un tablero queda claro qué se ve y qué no.
+  Borrar un tablero es una acción de organización y no destruye historial.
+  Reemplazan a la "categoría" que tenía el seguimiento: dos formas de agrupar
+  confundían, y "Gimnasio" dice más que "Físico".
 - Limitación: los valores son numéricos. Los rangos con nombre (ej. "Gold
   Nova") necesitarían una escala ordinal.
 - El gráfico de evolución es un SVG hecho a mano (una `polyline`), sin
@@ -303,19 +313,24 @@ Sobre un objetivo cerrado, todo lo que modifica el plan responde `400` con
 | Método | Ruta | Descripción | Respuesta OK |
 |---|---|---|---|
 | `GET` | `/api/trackers` | Seguimientos con registros y resumen | `200` + lista |
-| `POST` | `/api/trackers` | `{ name, unit?, higherIsBetter?, type? }` | `201` + seguimiento |
+| `POST` | `/api/trackers` | `{ name, unit?, higherIsBetter?, boardId? }` | `201` + seguimiento |
 | `GET` | `/api/trackers/:id` | Seguimiento con registros y resumen | `200` + seguimiento |
 | `PATCH` | `/api/trackers/:id` | Actualiza solo los campos enviados | `200` + seguimiento |
 | `DELETE` | `/api/trackers/:id` | Borra el seguimiento y sus registros | `200` + `{ ok: true }` |
 | `POST` | `/api/trackers/:id/entries` | `{ date, value, note? }` | `201` + registro |
 | `DELETE` | `/api/trackers/:id/entries/:entryId` | Borra un registro | `200` + `{ ok: true }` |
+| `GET` | `/api/boards` | Tableros (sin seguimientos: la página los agrupa por `boardId`) | `200` + lista |
+| `POST` | `/api/boards` | `{ name, description? }` | `201` + tablero |
+| `PATCH` | `/api/boards/:id` | Actualiza solo los campos enviados | `200` + tablero |
+| `DELETE` | `/api/boards/:id` | Borra el tablero; sus seguimientos quedan sin tablero | `200` + `{ ok: true }` |
 
 | Campo | Regla |
 |---|---|
 | `name` | Obligatorio, 1–40 caracteres |
 | `unit` | Opcional, máximo 10 caracteres |
 | `higherIsBetter` | Booleano (por defecto `true`) |
-| `type` | Opcional: un tipo de objetivo, o `null` |
+| `boardId` | Opcional: id de un tablero propio, o `null` (sin tablero) |
+| `name` (tablero) | Obligatorio, 1–40 caracteres; `description` opcional, máximo 200 |
 | `value` | Número finito (`|value| ≤ 10⁹`) |
 | `note` | Opcional, máximo 200 caracteres |
 
@@ -416,7 +431,7 @@ Los tests de integración usan una base SQLite propia por proceso
 (`prisma/test-<pid>.db`), creada con las mismas migraciones y borrada al
 terminar: nunca tocan `dev.db`. La app escucha en el puerto 0 (el sistema
 operativo asigna uno libre), así los tests pueden correr con el servidor de
-desarrollo levantado. Hay 201 tests; la lógica de planificación está cubierta
+desarrollo levantado. Hay 208 tests; la lógica de planificación está cubierta
 al 100%.
 
 ## Roadmap
@@ -425,6 +440,6 @@ al 100%.
 - [x] **v1.1** — Tareas persistidas (SQLite + Prisma), rangos, prioridad y categoría
 - [x] **v1.2 · Fase 1** — Pulido: fechas independientes de la zona horaria, validación, manejo de errores, índices, UX, tests
 - [x] **v1.2 · Fase 2** — Objetivos: plan automático por semanas (por contenido o por fases), cuotas semanales, registro de sesiones, seguimiento y edición del plan
-- [x] **v1.3** — Pulido de objetivos (editar datos, cambiar el plazo, cerrar o abandonar) y seguimientos personales vinculables a objetivos
+- [x] **v1.3** — Pulido de objetivos (editar datos, cambiar el plazo, cerrar o abandonar) y seguimientos personales, agrupados en tableros y vinculables a objetivos
 - [ ] **v1.4** — Login y múltiples usuarios (`currentUserId` pasa a leer la sesión; los controllers no cambian)
-- [ ] **v1.5** — Grupos: cada grupo define temas (ej. "Rating CS2", "Press banca") y cada miembro elige qué seguimiento propio comparte en cada uno. Nunca se comparten objetivos ni fechas límite
+- [ ] **v1.5** — Grupos de amigos: se comparte un **tablero** con el grupo y cada miembro elige si **se une** (nadie queda adentro automáticamente). Al unirse, se le crean los mismos seguimientos vinculados, y el grupo ve un ranking por seguimiento. Nunca se comparten objetivos ni fechas límite

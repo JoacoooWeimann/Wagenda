@@ -27,11 +27,12 @@ export async function startTestServer() {
   });
   const baseUrl = `http://localhost:${server.address().port}`;
 
-  // Estado inicial de cada test: sin objetivos, tareas ni seguimientos, y solo el usuario invitado
+  // Estado inicial de cada test: sin objetivos, tareas, seguimientos ni tableros, y solo el usuario invitado
   async function reset() {
     await prisma.goal.deleteMany(); // cascade: sus semanas y tareas
     await prisma.task.deleteMany();
     await prisma.tracker.deleteMany(); // cascade: sus registros
+    await prisma.board.deleteMany();
     await prisma.user.deleteMany({ where: { id: { not: 1 } } });
     await prisma.user.upsert({ where: { id: 1 }, update: {}, create: { id: 1, name: 'Invitado' } });
   }

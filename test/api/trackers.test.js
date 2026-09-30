@@ -7,7 +7,7 @@ before(async () => { ctx = await startTestServer(); });
 after(async () => { await ctx.stop(); });
 beforeEach(async () => { await ctx.reset(); });
 
-async function createTracker(body = { name: 'Press banca', unit: 'kg', type: 'fisico' }) {
+async function createTracker(body = { name: 'Press banca', unit: 'kg' }) {
   const res = await ctx.request('POST', '/api/trackers', body);
   assert.equal(res.status, 201, JSON.stringify(res.body));
   return res.body;
@@ -54,9 +54,9 @@ describe('seguimientos', () => {
   });
 
   it('valida los datos y borra registros', async () => {
-    const bad = await ctx.request('POST', '/api/trackers', { name: '', type: 'x', higherIsBetter: 'si' });
+    const bad = await ctx.request('POST', '/api/trackers', { name: '', boardId: 'x', higherIsBetter: 'si' });
     assert.equal(bad.status, 400);
-    assert.deepEqual(Object.keys(bad.body.fields).sort(), ['higherIsBetter', 'name', 'type']);
+    assert.deepEqual(Object.keys(bad.body.fields).sort(), ['boardId', 'higherIsBetter', 'name']);
 
     const tracker = await createTracker();
     const badEntry = await addEntry(tracker, '2026-13-01', 'mucho');
@@ -134,5 +134,65 @@ describe('objetivos vinculados a un seguimiento', () => {
     const res = await ctx.request('PATCH', `/api/goals/${goal.id}`, { trackerId: tracker.id });
     assert.equal(res.status, 400);
     assert.ok(res.body.fields.trackerId);
+  });
+});
+
+describe('tableros', () => {
+  const createBoard = async (body = { name: 'Gimnasio' }) => {
+    const res = await ctx.request('POST', '/api/boards', body);
+    assert.equal(res.status, 201, JSON.stringify(res.body));
+    return res.body;
+  };
+
+  it('crea, lista, edita y valida', async () => {
+    await createBoard({ name: 'Gimnasio', description: 'Fuerza' });
+    await createBoard({ name: 'CS2' });
+    assert.deepEqual((await ctx.request('GET', '/api/boards')).body.map(b => b.name), ['CS2', 'Gimnasio']);
+
+    const [cs] = (await ctx.request('GET', '/api/boards')).body;
+    const edited = await ctx.request('PATCH', `/api/boards/${cs.id}`, { name: 'Counter-Strike 2' });
+    assert.equal(edited.body.name, 'Counter-Strike 2');
+
+    assert.ok((await ctx.request('POST', '/api/boards', { name: '' })).body.fields.name);
+    assert.equal((await ctx.request('PATCH', `/api/boards/${cs.id}`, {})).status, 400);
+  });
+
+  it('un seguimiento se crea dentro de un tablero y se mueve a otro o a ninguno', async () => {
+    const gym = await createBoard();
+    const cs = await createBoard({ name: 'CS2' });
+    const tracker = await createTracker({ name: 'Rating', boardId: gym.id });
+    assert.equal(tracker.boardId, gym.id);
+
+    const moved = await ctx.request('PATCH', `/api/trackers/${tracker.id}`, { boardId: cs.id });
+    assert.equal(moved.body.boardId, cs.id);
+    const loose = await ctx.request('PATCH', `/api/trackers/${tracker.id}`, { boardId: null });
+    assert.equal(loose.body.boardId, null);
+  });
+
+  it('borrar un tablero no borra sus seguimientos ni sus registros', async () => {
+    const gym = await createBoard();
+    const tracker = await createTracker({ name: 'Press banca', unit: 'kg', boardId: gym.id });
+    await addEntry(tracker, '2026-10-05', 80);
+
+    assert.equal((await ctx.request('DELETE', `/api/boards/${gym.id}`)).status, 200);
+    const after = (await ctx.request('GET', `/api/trackers/${tracker.id}`)).body;
+    assert.equal(after.boardId, null);
+    assert.equal(after.entries.length, 1);
+    assert.equal((await ctx.request('DELETE', `/api/boards/${gym.id}`)).status, 404);
+  });
+
+  it('los tableros de otro usuario no se ven, no se tocan y no reciben seguimientos', async () => {
+    const other = await ctx.prisma.user.create({ data: { name: 'Otro' } });
+    const foreign = await ctx.prisma.board.create({ data: { name: 'Ajeno', userId: other.id } });
+
+    assert.deepEqual((await ctx.request('GET', '/api/boards')).body, []);
+    assert.equal((await ctx.request('PATCH', `/api/boards/${foreign.id}`, { name: 'Mío' })).status, 404);
+    assert.equal((await ctx.request('DELETE', `/api/boards/${foreign.id}`)).status, 404);
+
+    const res = await ctx.request('POST', '/api/trackers', { name: 'x', boardId: foreign.id });
+    assert.equal(res.body.fields.boardId, 'Tablero no encontrado');
+    const mine = await createTracker();
+    const move = await ctx.request('PATCH', `/api/trackers/${mine.id}`, { boardId: foreign.id });
+    assert.equal(move.body.fields.boardId, 'Tablero no encontrado');
   });
 });

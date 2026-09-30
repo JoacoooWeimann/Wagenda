@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatValue, changeInfo, sparklinePoints, buildTrackerPayload } from '../../src/client/utiles/trackers.js';
+import { formatValue, changeInfo, sparklinePoints, buildTrackerPayload, groupByBoard } from '../../src/client/utiles/trackers.js';
 
 describe('utilidades de seguimientos (cliente)', () => {
   it('formatValue', () => {
@@ -29,7 +29,17 @@ describe('utilidades de seguimientos (cliente)', () => {
     assert.deepEqual(sparklinePoints([], 100, 40), []);
   });
 
-  it('buildTrackerPayload: tipo vacío es null', () => {
-    assert.equal(buildTrackerPayload({ name: 'a', unit: '', higherIsBetter: true, type: '' }).type, null);
+  it('buildTrackerPayload: sin tablero es null; con tablero, el id numérico', () => {
+    assert.equal(buildTrackerPayload({ name: 'a', unit: '', higherIsBetter: true, boardId: '' }).boardId, null);
+    assert.equal(buildTrackerPayload({ name: 'a', unit: '', higherIsBetter: true, boardId: '3' }).boardId, 3);
+  });
+
+  it('groupByBoard: secciones en el orden de los tableros y los sueltos aparte', () => {
+    const boards = [{ id: 2, name: 'CS2' }, { id: 1, name: 'Gimnasio' }];
+    const trackers = [{ id: 10, boardId: 1 }, { id: 11, boardId: null }, { id: 12, boardId: 2 }, { id: 13, boardId: 1 }];
+    const { sections, loose } = groupByBoard(boards, trackers);
+    assert.deepEqual(sections.map(s => [s.board.name, s.trackers.map(t => t.id)]), [['CS2', [12]], ['Gimnasio', [10, 13]]]);
+    assert.deepEqual(loose.map(t => t.id), [11]);
+    assert.deepEqual(groupByBoard([], []).sections, []);
   });
 });

@@ -2,9 +2,9 @@
 // goals.js: funciones puras que devuelven { data, fields }.
 import { parseDateOnly } from '../dates.js';
 import { optionalText, requiredText, hasErrors } from './common.js';
-import { GOAL_TYPES } from './goals.js';
 
 export const TRACKER_LIMITS = { name: 40, unit: 10, note: 200, value: 1e9 };
+export const BOARD_LIMITS = { name: 40, description: 200 };
 
 // Campos del seguimiento. `partial`: en la edición todos son opcionales.
 function trackerFields(body, { partial }) {
@@ -26,10 +26,11 @@ function trackerFields(body, { partial }) {
     else fields.higherIsBetter = 'higherIsBetter debe ser true o false';
   }
 
-  // Categoría opcional, con los mismos tipos que los objetivos; null la quita
-  if (body.type !== undefined) {
-    if (body.type === null || GOAL_TYPES.includes(body.type)) data.type = body.type;
-    else fields.type = 'Tipo inválido';
+  // Tablero opcional; null lo saca del tablero. Que sea del usuario lo
+  // verifica el controller (necesita la base).
+  if (body.boardId !== undefined) {
+    if (body.boardId === null || (Number.isInteger(body.boardId) && body.boardId > 0)) data.boardId = body.boardId;
+    else fields.boardId = 'Tablero inválido';
   }
 
   return { data, fields };
@@ -74,4 +75,30 @@ export function validateEntry(body = {}, { valueRequired = true } = {}) {
   }
 
   return { data, fields };
+}
+
+// Tablero: nombre y descripción opcional. `partial`: en la edición todo es opcional.
+function boardFields(body, { partial }) {
+  const fields = {};
+  const data = {};
+
+  if (!partial || body.name !== undefined) {
+    const name = requiredText(body.name, BOARD_LIMITS.name, 'name', fields, 'El nombre es obligatorio');
+    if (name !== undefined) data.name = name;
+  }
+
+  if (body.description !== undefined) {
+    const description = optionalText(body.description, BOARD_LIMITS.description, 'description', fields);
+    if (description !== undefined) data.description = description;
+  }
+
+  return { data, fields };
+}
+
+export const validateBoardCreate = (body = {}) => boardFields(body, { partial: false });
+
+export function validateBoardUpdate(body = {}) {
+  const { data, fields } = boardFields(body, { partial: true });
+  const error = !hasErrors(fields) && Object.keys(data).length === 0 ? 'No hay campos para actualizar' : undefined;
+  return { data, fields, error };
 }

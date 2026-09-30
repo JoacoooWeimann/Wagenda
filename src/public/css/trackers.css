@@ -38,3 +38,5 @@
 
 .tracker-history li { gap: 10px; }
 .tracker-note { color: #666; font-size: 0.85rem; }
+
+.tracker-new-title { font-size: 1rem; margin: 0 0 8px; }

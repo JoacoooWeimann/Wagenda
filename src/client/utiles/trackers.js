@@ -33,12 +33,22 @@ export function sparklinePoints(entries, width, height, pad = 4) {
 
 const round = (n) => Math.round(n * 10) / 10;
 
-// Body para crear o editar un seguimiento a partir del formulario
+// Body para crear o editar un seguimiento a partir del formulario.
+// boardId viaja como texto en el select: '' = sin tablero (null).
 export function buildTrackerPayload(form) {
   return {
     name: form.name,
     unit: form.unit,
     higherIsBetter: form.higherIsBetter,
-    type: form.type === '' ? null : form.type
+    boardId: form.boardId === '' ? null : Number(form.boardId)
+  };
+}
+
+// Agrupa los seguimientos por tablero, en el orden de `boards`, más los que no
+// tienen tablero al final
+export function groupByBoard(boards, trackers) {
+  return {
+    sections: boards.map(board => ({ board, trackers: trackers.filter(t => t.boardId === board.id) })),
+    loose: trackers.filter(t => t.boardId === null)
   };
 }

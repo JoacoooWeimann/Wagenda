@@ -47,6 +47,7 @@ model User {
   tasks    Task[]
   goals    Goal[]
   trackers Tracker[]
+  boards   Board[]
 }
 
 model Goal {
@@ -116,6 +117,22 @@ model Task {
   @@index([userId, startDate])
 }
 
+// Tablero: agrupa seguimientos relacionados (ej. "Gimnasio": press banca,
+// sentadilla; "CS2": rating, K/D). Más adelante es lo que se comparte con un
+// grupo de amigos, y cada miembro elige si se une.
+model Board {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId   Int
+  trackers Tracker[]
+
+  @@index([userId])
+}
+
 // Algo que se mide en el tiempo, sin fecha límite (ej. "Press banca" en kg,
 // "Rating Premier" en pts). Un objetivo mide constancia (sesiones y cuotas);
 // un seguimiento mide rendimiento. Es lo que más adelante se comparte en grupos.
@@ -124,7 +141,6 @@ model Tracker {
   name           String
   unit           String?
   higherIsBetter Boolean   @default(true) // en "5 km" (minutos), menos es mejor
-  type           GoalType?
   createdAt      DateTime  @default(now())
 
   user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -132,7 +148,13 @@ model Tracker {
   entries TrackerEntry[]
   goals   Goal[]
 
+  // Tablero opcional (uno solo). SetNull: borrar un tablero no borra sus
+  // seguimientos ni sus registros; pasan a "Sin tablero".
+  board   Board? @relation(fields: [boardId], references: [id], onDelete: SetNull)
+  boardId Int?
+
   @@index([userId])
+  @@index([boardId])
 }
 
 model TrackerEntry {
