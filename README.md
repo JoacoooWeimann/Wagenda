@@ -13,11 +13,12 @@ ramas `develop` → `main` y decisiones técnicas documentadas.
 | Pieza | Rol | Por qué |
 |---|---|---|
 | **Node.js + Express 5** | Servidor HTTP y API REST | Express 5 manda automáticamente los errores de los handlers `async` al manejador de errores, sin `try/catch` en cada ruta |
-| **EJS** | Vistas renderizadas en el servidor | Las páginas simples (inicio, errores) no necesitan JavaScript en el cliente |
+| **EJS** | Vistas renderizadas en el servidor | Las páginas simples (inicio, errores, login y registro) no necesitan JavaScript en el cliente |
 | **React** (como "islas") | El calendario y la página de objetivos | La interactividad está concentrada en dos widgets: React se monta en un `<div>` de cada vista EJS en vez de convertir todo en una SPA |
 | **Vite** | Compila el código de React | Un punto de entrada por isla (`app.js`, `goals.js`); React va en un chunk común que el navegador descarga una sola vez |
 | **Prisma 6 + SQLite** | Modelo de datos, migraciones y consultas | SQLite no necesita un servidor aparte. Prisma está fijado en la versión 6 porque la 7 cambia el flujo clásico de generación del cliente |
 | **node:test** | Tests unitarios y de integración | Viene incluido en Node: no suma dependencias |
+| **node:crypto** | Hash de contraseñas (scrypt) y tokens de sesión | Viene incluido en Node: el login no suma dependencias (ver "Autenticación") |
 
 Todo el proyecto usa **ESM** (`import`/`export`) con extensión `.js` explícita en
 los imports relativos.
@@ -65,17 +66,18 @@ npm run watch:client   # recompila React al guardar cambios
 prisma/
   schema.prisma          Modelo de datos
   migrations/            Historial de migraciones SQL
-  seed.js                Usuario invitado (id 1)
+  seed.js                Usuario invitado (id 1): la primera cuenta registrada se queda con él
 src/
   index.js               Punto de entrada: solo app.listen()
   app.js                 Arma la app de Express (middlewares, rutas, errores)
-  routes/                Definición de endpoints (tasks, goals, trackers, páginas)
+  routes/                Definición de endpoints (auth, tasks, goals, trackers, boards, páginas)
   controllers/           Orquestan: validar → consultar/guardar → responder
-  middlewares/           Manejo de errores y datos comunes a las vistas
+  middlewares/           Sesión (loadUser, requireAuth), errores y datos comunes a las vistas
   utiles/                Utilidades del backend (sin dependencia de Express)
     db.js                  Cliente de Prisma compartido
     dates.js               Convención de fechas (ver abajo)
     currentUser.js         Único punto que decide el usuario del pedido
+    auth/                  Hash de contraseñas y sesiones
     queries.js / responses.js
     validation/            Validación de entrada (funciones puras)
     planning/              Algoritmo de planificación y cambio de plazo (funciones puras)
@@ -102,7 +104,8 @@ no saben nada de HTTP ni de la base.
 ## Modelo de datos
 
 ```
-User ─┬─< Task                       (tareas sueltas)
+User ─┬─< Session                    (sesiones iniciadas)
+      ├─< Task                       (tareas sueltas)
       ├─< Goal ─< GoalWeek ─< Task   (tareas de un plan)
       ├─< Board ─○< Tracker          (tableros; un seguimiento está en uno o en ninguno)
       └─< Tracker ─< TrackerEntry    (seguimientos y sus registros)
@@ -111,6 +114,8 @@ User ─┬─< Task                       (tareas sueltas)
 
 | Modelo | Campos clave |
 |---|---|
+| `User` | `name` (visible), `username` (único, para entrar), `passwordHash` |
+| `Session` | `tokenHash` (único), `expiresAt` |
 | `Task` | `title`, `startDate`/`endDate`, `priority`, `category`, `done`, `kind`, `goalWeekId?` |
 | `Goal` | `title`, `type` (académico, físico, videojuego, profesional), `strategy` (divisible, fases), `startDate`, `deadline`, `status` (activo, logrado, abandonado), `closedAt?`, `trackerId?` |
 | `GoalWeek` | `number`, `startDate`/`endDate`, `label` (ej. "Unidad 3 · TP 2", "Intensidad"), `target` (cuota) |
@@ -257,8 +262,22 @@ registros; la mejor marca depende de `higherIsBetter` (en 5 km, menos es mejor).
 
 ## API
 
-Todas las rutas trabajan sobre los datos del usuario actual (por ahora, el
-invitado con id 1).
+Todas las rutas de `/api` trabajan sobre los datos del usuario de la sesión.
+Sin sesión responden `401`; el cliente redirige al login.
+
+### Autenticación (formularios HTML)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET`/`POST` | `/login` | `username`, `password`, `next?`. OK: cookie de sesión y redirección a `next` |
+| `GET`/`POST` | `/register` | `name`, `username`, `password`, `passwordConfirm`, `next?` |
+| `POST` | `/logout` | Borra la sesión y la cookie |
+
+| Campo | Regla |
+|---|---|
+| `username` | 3–20 caracteres: letras, números y `_`. Se guarda en minúsculas y es único |
+| `name` | Obligatorio, máximo 40: el nombre que ven los demás |
+| `password` | 8–200 caracteres (no se recortan espacios) |
 
 ### Tareas
 
@@ -379,8 +398,37 @@ que decide en un único lugar el formato de la respuesta y qué se registra en e
 
 ### Propiedad de los datos
 Toda consulta filtra por `id` **y** `userId`, que sale de `currentUserId(req)`.
-Hoy siempre es el invitado; con login, esa función va a leer la sesión y ningún
-controller va a cambiar.
+Hasta la v1.3 devolvía siempre el invitado; con el login pasó a leer la sesión
+y **ningún controller cambió**: para eso estaba ese punto único. Un recurso de
+otro usuario responde `404`, igual que uno inexistente: no revela que existe.
+
+### Autenticación
+- **Contraseñas con scrypt** (`node:crypto`, sin dependencias). Es un hash
+  *lento* y *memory-hard*: verificar una contraseña tarda decenas de
+  milisegundos y usa 32 MiB, así que probar millones (si se filtrara la base)
+  sale muy caro. Parámetros `N=2^15, r=8, p=3`, una de las configuraciones
+  mínimas que recomienda OWASP. Cada hash tiene su propio *salt* aleatorio
+  (dos contraseñas iguales dan hashes distintos) y guarda sus parámetros, así
+  se pueden subir sin invalidar los anteriores. Se compara con
+  `timingSafeEqual`.
+- **Sesiones en una tabla propia**, en vez de `express-session` o JWT. Al
+  loguearse se genera un token de 256 bits aleatorios que va en una cookie; en
+  la base se guarda solo su SHA-256 (si se filtrara la base, los tokens no
+  sirven). Cerrar sesión es borrar la fila: a diferencia de un JWT, se puede
+  revocar. Duran 30 días.
+- **Cookie `HttpOnly`** (el JavaScript de la página no la puede leer: un XSS no
+  roba la sesión), **`SameSite=Lax`** (el navegador no la manda en un POST que
+  venga de otro sitio: corta los ataques CSRF a la API) y **`Secure`** en
+  producción (solo por HTTPS).
+- **No revela qué usuarios existen:** "usuario inexistente" y "contraseña
+  incorrecta" dan el mismo mensaje, y en el primer caso igual se calcula un
+  scrypt, para que tarden lo mismo.
+- **`next` solo acepta rutas propias** (`/goals`), no `//otro-sitio.com`: si no,
+  el login serviría para redirigir a una página falsa (*open redirect*).
+- **El usuario invitado:** la primera cuenta registrada se queda con el
+  usuario 1 y sus datos. El `updateMany` filtra por `passwordHash: null`, así
+  que solo puede pasar una vez.
+- **Pendiente:** limitar intentos de login por IP (fuerza bruta online).
 
 ### El algoritmo es puro y determinista
 `generatePlan` recibe un objetivo validado y devuelve el plan en memoria, sin
@@ -431,7 +479,7 @@ Los tests de integración usan una base SQLite propia por proceso
 (`prisma/test-<pid>.db`), creada con las mismas migraciones y borrada al
 terminar: nunca tocan `dev.db`. La app escucha en el puerto 0 (el sistema
 operativo asigna uno libre), así los tests pueden correr con el servidor de
-desarrollo levantado. Hay 208 tests; la lógica de planificación está cubierta
+desarrollo levantado. Hay 226 tests; la lógica de planificación está cubierta
 al 100%.
 
 ## Roadmap
@@ -441,5 +489,5 @@ al 100%.
 - [x] **v1.2 · Fase 1** — Pulido: fechas independientes de la zona horaria, validación, manejo de errores, índices, UX, tests
 - [x] **v1.2 · Fase 2** — Objetivos: plan automático por semanas (por contenido o por fases), cuotas semanales, registro de sesiones, seguimiento y edición del plan
 - [x] **v1.3** — Pulido de objetivos (editar datos, cambiar el plazo, cerrar o abandonar) y seguimientos personales, agrupados en tableros y vinculables a objetivos
-- [ ] **v1.4** — Login y múltiples usuarios (`currentUserId` pasa a leer la sesión; los controllers no cambian)
+- [x] **v1.4** — Login y múltiples usuarios: registro, sesiones propias con scrypt, la primera cuenta reclama los datos del invitado
 - [ ] **v1.5** — Grupos de amigos: se comparte un **tablero** con el grupo y cada miembro elige si **se une** (nadie queda adentro automáticamente). Al unirse, se le crean los mismos seguimientos vinculados, y el grupo ve un ranking por seguimiento. Nunca se comparten objetivos ni fechas límite
