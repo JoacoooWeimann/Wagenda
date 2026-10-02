@@ -67,3 +67,19 @@ export const updateTracker = (id, changes) => request('PATCH', `/api/trackers/${
 export const deleteTracker = (id) => request('DELETE', `/api/trackers/${id}`);
 export const addEntry = (trackerId, entry) => request('POST', `/api/trackers/${trackerId}/entries`, entry);
 export const deleteEntry = (trackerId, entryId) => request('DELETE', `/api/trackers/${trackerId}/entries/${entryId}`);
+
+export const getGroups = () => request('GET', '/api/groups');
+export const getGroup = (id) => request('GET', `/api/groups/${id}`);
+export const createGroup = (group) => request('POST', '/api/groups', group);
+export const updateGroup = (id, changes) => request('PATCH', `/api/groups/${id}`, changes);
+export const deleteGroup = (id) => request('DELETE', `/api/groups/${id}`);
+export const joinGroup = (code) => request('POST', '/api/groups/join', { code });
+export const regenerateCode = (id) => request('POST', `/api/groups/${id}/code`);
+export const transferGroup = (id, userId) => request('POST', `/api/groups/${id}/transfer`, { userId });
+export const leaveGroup = (id) => request('DELETE', `/api/groups/${id}/members/me`);
+export const kickMember = (id, userId) => request('DELETE', `/api/groups/${id}/members/${userId}`);
+export const shareBoard = (id, boardId) => request('POST', `/api/groups/${id}/shares`, { boardId });
+export const unshareBoard = (id, shareId) => request('DELETE', `/api/groups/${id}/shares/${shareId}`);
+export const joinBoard = (id, shareId) => request('POST', `/api/groups/${id}/shares/${shareId}/join`);
+export const leaveBoard = (id, shareId) => request('DELETE', `/api/groups/${id}/shares/${shareId}/join`);
+export const getRanking = (id, shareId) => request('GET', `/api/groups/${id}/shares/${shareId}/ranking`);

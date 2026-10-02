@@ -13,7 +13,8 @@ export default defineConfig({
       input: {
         app: path.resolve(import.meta.dirname, 'src/client/main.jsx'),   // calendario
         goals: path.resolve(import.meta.dirname, 'src/client/goals.jsx'), // objetivos
-        trackers: path.resolve(import.meta.dirname, 'src/client/trackers.jsx') // seguimientos
+        trackers: path.resolve(import.meta.dirname, 'src/client/trackers.jsx'), // seguimientos
+        groups: path.resolve(import.meta.dirname, 'src/client/groups.jsx') // grupos
       },
       output: {
         entryFileNames: '[name].js',

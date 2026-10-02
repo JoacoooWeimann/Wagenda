@@ -1,0 +1,50 @@
+/* Grupos: reutiliza tarjetas, botones y formularios de goals.css */
+
+.group-list { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+
+.group-invite {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 16px;
+  font-size: 0.9rem;
+}
+.group-invite code { font-size: 1rem; letter-spacing: 0.1em; color: #2563eb; }
+
+.group-subtitle { font-size: 1rem; font-weight: 600; margin: 16px 0 8px; }
+
+.group-members { list-style: none; padding: 0; margin: 0; }
+.group-members li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 0.9rem;
+}
+.group-members small, .group-ranking-user small { color: #999; }
+.group-members em { color: #2563eb; font-style: normal; font-size: 0.8rem; }
+
+.goal-session-form select { padding: 6px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; }
+.goal-session-form input[type="text"] { padding: 6px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; }
+.goal-session-form .is-invalid { border-color: #dc2626; }
+
+.group-ranking { margin-top: 12px; }
+.group-ranking-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.group-ranking-tracker h4 { font-size: 0.95rem; margin: 12px 0 4px; }
+.group-ranking-tracker h4 small { color: #999; font-weight: 400; }
+.group-ranking-tracker ol { list-style: none; padding: 0; margin: 0; }
+.group-ranking-tracker li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+.group-ranking-pos { width: 24px; color: #999; }
+.group-ranking-user { flex: 1; }
+.group-ranking-me { background: #eff6ff; }

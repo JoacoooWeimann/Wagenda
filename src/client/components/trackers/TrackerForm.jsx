@@ -58,7 +58,8 @@ export default function TrackerForm({ tracker, boards = [], boardId = null, onSa
         <label>Tablero
           <select className={invalid('boardId')} value={form.boardId} onChange={(e) => updateField('boardId', e.target.value)}>
             <option value="">Sin tablero</option>
-            {boards.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
+            {/* Las copias de tableros compartidos no reciben seguimientos propios */}
+            {boards.filter(b => !b.sharedBy).map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
           </select>
           <FieldError message={fieldErrors.boardId} />
         </label>

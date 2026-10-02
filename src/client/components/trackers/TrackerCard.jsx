@@ -18,6 +18,8 @@ export default function TrackerCard({ tracker, boards, today, onChange, onReload
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const { summary, unit, higherIsBetter } = tracker;
+  // Copia de un tablero compartido: la estructura la define el dueño
+  const isCopy = tracker.sourceTrackerId !== null;
   const change = changeInfo(summary, higherIsBetter, unit);
   const fmt = (v) => formatValue(v, unit);
 
@@ -105,8 +107,8 @@ export default function TrackerCard({ tracker, boards, today, onChange, onReload
             {showHistory ? 'Ocultar historial ▴' : 'Ver historial ▾'}
           </button>
         )}
-        {!editing && <button type="button" className="goal-btn" onClick={() => setEditing(true)}>Editar</button>}
-        {confirmingDelete ? (
+        {!editing && !isCopy && <button type="button" className="goal-btn" onClick={() => setEditing(true)}>Editar</button>}
+        {isCopy ? null : confirmingDelete ? (
           <span className="goal-confirm">
             ¿Borrar el seguimiento y sus registros?
             <button type="button" className="goal-btn-danger" onClick={() => onDelete(tracker.id)}>Borrar</button>
