@@ -25,6 +25,11 @@ async function request(method, url, body) {
   // Si el servidor no devolvió JSON (ej. un proxy caído), data queda en null
   const data = await res.json().catch(() => null);
 
+  // Sesión vencida o cerrada en otra pestaña: al login, volviendo después a esta página
+  if (res.status === 401) {
+    window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+  }
+
   if (!res.ok) {
     throw new ApiError(data?.error || `Error ${res.status}`, {
       status: res.status,

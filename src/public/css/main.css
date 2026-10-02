@@ -1,3 +1,5 @@
 body{
     background-color: #063f41
 }
+/* Login y registro */
+.auth-card { width: 100%; max-width: 400px; }

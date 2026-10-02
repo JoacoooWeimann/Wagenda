@@ -41,9 +41,14 @@ enum GoalStatus {
   abandonado
 }
 
+// username y passwordHash son opcionales solo por el invitado (id 1, del seed):
+// no tiene credenciales hasta que la primera cuenta registrada lo reclama.
 model User {
-  id    Int    @id @default(autoincrement())
-  name  String @default("Invitado")
+  id           Int     @id @default(autoincrement())
+  name         String  @default("Invitado") // nombre visible
+  username     String? @unique              // para loguearse; en minúsculas
+  passwordHash String?                      // scrypt, ver utiles/auth/password.js
+  sessions     Session[]
   tasks    Task[]
   goals    Goal[]
   trackers Tracker[]
@@ -169,4 +174,19 @@ model TrackerEntry {
 
   // Historial de un seguimiento ordenado por fecha
   @@index([trackerId, date])
+}
+
+// Sesión iniciada. La cookie lleva un token aleatorio; acá se guarda solo su
+// hash (SHA-256): si se filtrara la base, los tokens no sirven para entrar.
+// Cerrar sesión es borrar la fila.
+model Session {
+  id        Int      @id @default(autoincrement())
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+
+  @@index([userId])
 }

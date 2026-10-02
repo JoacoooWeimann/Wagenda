@@ -20,6 +20,7 @@ export async function startTestServer() {
   // importarse y lee la variable en ese momento.
   const { default: app } = await import('../../src/app.js');
   const { default: prisma } = await import('../../src/utiles/db.js');
+  const { createSession, SESSION_COOKIE } = await import('../../src/utiles/auth/sessions.js');
 
   // Puerto 0: el sistema operativo asigna uno libre (no choca con `npm run dev`)
   const server = await new Promise(resolve => {
@@ -27,14 +28,26 @@ export async function startTestServer() {
   });
   const baseUrl = `http://localhost:${server.address().port}`;
 
-  // Estado inicial de cada test: sin objetivos, tareas, seguimientos ni tableros, y solo el usuario invitado
+  // Cookie de sesión de un usuario, sin pasar por el login (scrypt es lento a propósito)
+  const sessionCookie = async (userId) => `${SESSION_COOKIE}=${await createSession(userId)}`;
+  let defaultCookie = null;
+
+  // Estado inicial de cada test: sin objetivos, tareas, seguimientos ni tableros,
+  // solo el usuario invitado (sin credenciales) y una sesión suya, que
+  // request() usa por defecto
   async function reset() {
     await prisma.goal.deleteMany(); // cascade: sus semanas y tareas
     await prisma.task.deleteMany();
     await prisma.tracker.deleteMany(); // cascade: sus registros
     await prisma.board.deleteMany();
     await prisma.user.deleteMany({ where: { id: { not: 1 } } });
-    await prisma.user.upsert({ where: { id: 1 }, update: {}, create: { id: 1, name: 'Invitado' } });
+    await prisma.session.deleteMany();
+    await prisma.user.upsert({
+      where: { id: 1 },
+      update: { name: 'Invitado', username: null, passwordHash: null },
+      create: { id: 1, name: 'Invitado' }
+    });
+    defaultCookie = await sessionCookie(1);
   }
 
   async function stop() {
@@ -45,17 +58,25 @@ export async function startTestServer() {
     }
   }
 
-  // Pedido a la API; devuelve status, content-type y body (JSON si corresponde)
-  async function request(method, url, body, { raw = false } = {}) {
+  // Pedido a la app con la sesión del usuario 1 (cookie: null = sin sesión, u
+  // otra cookie). form: body como formulario HTML. No sigue redirecciones, para
+  // poder ver el Location y el Set-Cookie. Devuelve status, content-type, body,
+  // location y la cookie de sesión que haya fijado.
+  async function request(method, url, body, { raw = false, form = false, cookie = defaultCookie } = {}) {
+    const headers = {};
+    if (body !== undefined) headers['Content-Type'] = form ? 'application/x-www-form-urlencoded' : 'application/json';
+    if (cookie) headers.Cookie = cookie;
     const res = await fetch(baseUrl + url, {
       method,
-      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-      body: body === undefined ? undefined : raw ? body : JSON.stringify(body)
+      headers,
+      redirect: 'manual',
+      body: body === undefined ? undefined : raw ? body : form ? new URLSearchParams(body).toString() : JSON.stringify(body)
     });
     const type = res.headers.get('content-type') || '';
     const data = type.includes('application/json') ? await res.json() : await res.text();
-    return { status: res.status, type, body: data };
+    const setCookie = res.headers.getSetCookie().find(c => c.startsWith(`${SESSION_COOKIE}=`)) ?? null;
+    return { status: res.status, type, body: data, location: res.headers.get('location'), setCookie };
   }
 
-  return { prisma, reset, stop, request };
+  return { prisma, reset, stop, request, sessionCookie };
 }
