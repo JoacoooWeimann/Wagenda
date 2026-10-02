@@ -70,7 +70,7 @@ prisma/
 src/
   index.js               Punto de entrada: solo app.listen()
   app.js                 Arma la app de Express (middlewares, rutas, errores)
-  routes/                Definición de endpoints (auth, tasks, goals, trackers, boards, páginas)
+  routes/                Definición de endpoints (auth, tasks, goals, trackers, boards, groups, páginas)
   controllers/           Orquestan: validar → consultar/guardar → responder
   middlewares/           Sesión (loadUser, requireAuth), errores y datos comunes a las vistas
   utiles/                Utilidades del backend (sin dependencia de Express)
@@ -78,6 +78,7 @@ src/
     dates.js               Convención de fechas (ver abajo)
     currentUser.js         Único punto que decide el usuario del pedido
     auth/                  Hash de contraseñas y sesiones
+    groups/                Código de invitación y sincronización de copias (sharing.js)
     queries.js / responses.js
     validation/            Validación de entrada (funciones puras)
     planning/              Algoritmo de planificación y cambio de plazo (funciones puras)
@@ -85,10 +86,11 @@ src/
   views/                 Plantillas EJS
   public/                Archivos estáticos (CSS, imágenes, build de Vite)
   client/                Todo lo que compila Vite (separado del backend)
-    main.jsx / goals.jsx / trackers.jsx   Una entrada por isla
+    main.jsx / goals.jsx / trackers.jsx / groups.jsx   Una entrada por isla
     components/calendar/   Calendar, DayModal, TaskItem, TaskForm, SessionLogger
     components/goals/      GoalsPage, GoalForm, GoalCard, PlanWeeks, GoalInfoForm, DeadlineForm
-    components/trackers/   TrackersPage, TrackerCard, TrackerForm, Sparkline
+    components/trackers/   TrackersPage, BoardSection, TrackerCard, TrackerForm, Sparkline
+    components/groups/     GroupsPage, GroupDetail, GroupForm, Ranking
     utiles/                Lógica pura del cliente y acceso a la API
 test/
   unit/                  Funciones puras (sin servidor ni base)
@@ -108,8 +110,12 @@ User ─┬─< Session                    (sesiones iniciadas)
       ├─< Task                       (tareas sueltas)
       ├─< Goal ─< GoalWeek ─< Task   (tareas de un plan)
       ├─< Board ─○< Tracker          (tableros; un seguimiento está en uno o en ninguno)
-      └─< Tracker ─< TrackerEntry    (seguimientos y sus registros)
-          Goal >─○ Tracker           (vínculo opcional, solo objetivos por fases)
+      ├─< Tracker ─< TrackerEntry    (seguimientos y sus registros)
+      │   Goal >─○ Tracker           (vínculo opcional, solo objetivos por fases)
+      └─< GroupMember >─ Group       (grupos de amigos)
+          Group ─< BoardShare >─ Board          (tablero compartido en un grupo)
+          BoardShare ─< ShareJoin >─ User       ("Unirme")
+          Board/Tracker ─○ source               (copias vinculadas al original)
 ```
 
 | Modelo | Campos clave |
@@ -122,6 +128,8 @@ User ─┬─< Session                    (sesiones iniciadas)
 | `Board` | `name`, `description?` |
 | `Tracker` | `name`, `unit?`, `higherIsBetter`, `boardId?` |
 | `TrackerEntry` | `date`, `value`, `note?` |
+| `Group` | `name`, `description?`, `inviteCode` (único), `weeklyLimit?` |
+| `GroupMember` | `role` (owner, member) |
 
 - Las tareas de un plan **son `Task` comunes**: aparecen en el calendario y se
   editan, marcan o borran como cualquier otra.
@@ -260,6 +268,50 @@ registros; la mejor marca depende de `higherIsBetter` (en 5 km, menos es mejor).
 - El gráfico de evolución es un SVG hecho a mano (una `polyline`), sin
   librería. El eje X es el tiempo real, no el número de registro.
 
+## Grupos
+
+Grupos de amigos para compartir progreso, **siempre de forma opcional**: la app
+tiene que servir igual a quien la usa solo.
+
+- **Entrar a un grupo no comparte nada.** Se entra con un código de invitación
+  (o su link, `/groups?join=CÓDIGO`). Cada miembro comparte, si quiere, alguno
+  de sus tableros, y cada uno elige a qué tableros **unirse**.
+- **Al unirse, recibe una copia** del tablero y sus seguimientos en su cuenta
+  (`Board.sourceBoardId`, `Tracker.sourceTrackerId`), y carga ahí sus valores.
+  El grupo ve un **ranking por seguimiento** (el dueño con el original, los
+  demás con su copia), ordenable por mejor marca, último valor o mejora.
+- **Solo valores y fechas:** las notas de los registros son privadas. Nunca se
+  comparten objetivos, fechas límite, tareas ni otros seguimientos.
+- **Participar es por grupo:** unirse a un tablero en un grupo no te muestra en
+  otro grupo donde también esté compartido.
+- **Límite semanal (anti-spam):** el grupo puede fijar "N registros por
+  semana". Cada uno carga lo que quiera en su cuenta, pero el ranking solo toma
+  los primeros N de cada semana: nadie infla su marca cargando 50 veces, y el
+  grupo no le pone reglas a los datos personales.
+- **Roles:** quien crea el grupo lo administra: lo edita, regenera el código
+  (invalida el link anterior), expulsa miembros, transfiere la administración y
+  puede quitar un tablero compartido (moderación). **No edita tableros ajenos:**
+  qué se mide y en qué unidad lo define solo el dueño de cada tablero, porque
+  son datos de su cuenta.
+
+### Por qué copias vinculadas
+La alternativa era un único seguimiento con registros de varias personas. Con
+copias, **cada uno es dueño de sus datos**: si el dueño borra el tablero, lo deja
+de compartir, o alguien sale o es expulsado, nadie pierde mediciones. La copia
+se **desvincula** y queda como tablero personal con todo su historial. Además,
+cada uno puede vincular su objetivo por fases a su copia.
+
+El costo es mantener la estructura sincronizada, y está concentrado en un solo
+módulo (`utiles/groups/sharing.js`), que los controllers llaman dentro de la
+misma transacción que el cambio:
+- El dueño agrega, renombra o cambia la unidad de un seguimiento, o renombra el
+  tablero: se replica en las copias.
+- El dueño quita o borra un seguimiento: sus copias se desvinculan.
+- Una copia está vinculada **mientras su usuario participe del tablero en al
+  menos un grupo** (si se unió en dos grupos, hay una sola copia).
+- Mientras está vinculada, la copia es de solo lectura en su estructura: se
+  cargan registros, pero no se renombra ni se borra.
+
 ## API
 
 Todas las rutas de `/api` trabajan sobre los datos del usuario de la sesión.
@@ -352,6 +404,34 @@ Sobre un objetivo cerrado, todo lo que modifica el plan responde `400` con
 | `name` (tablero) | Obligatorio, 1–40 caracteres; `description` opcional, máximo 200 |
 | `value` | Número finito (`|value| ≤ 10⁹`) |
 | `note` | Opcional, máximo 200 caracteres |
+
+### Grupos
+
+| Método | Ruta | Descripción | Respuesta OK |
+|---|---|---|---|
+| `GET` | `/api/groups` | Grupos del usuario (con rol y cantidad de miembros) | `200` + lista |
+| `POST` | `/api/groups` | `{ name, description?, weeklyLimit? }`: quien lo crea lo administra | `201` + grupo |
+| `POST` | `/api/groups/join` | `{ code }`: entrar con el código de invitación | `201` (o `200` si ya era miembro) + grupo |
+| `GET` | `/api/groups/:id` | Miembros y tableros compartidos | `200` + grupo |
+| `PATCH` | `/api/groups/:id` | Solo administrador | `200` + grupo |
+| `DELETE` | `/api/groups/:id` | Solo administrador; las copias quedan como personales | `200` + `{ ok: true }` |
+| `POST` | `/api/groups/:id/code` | Regenera el código (solo administrador) | `200` + grupo |
+| `POST` | `/api/groups/:id/transfer` | `{ userId }`: pasa la administración | `200` + grupo |
+| `DELETE` | `/api/groups/:id/members/me` | Salir (el administrador primero transfiere) | `200` + `{ ok: true }` |
+| `DELETE` | `/api/groups/:id/members/:userId` | Expulsar (solo administrador) | `200` + grupo |
+| `POST` | `/api/groups/:id/shares` | `{ boardId }`: compartir un tablero propio (no una copia) | `201` + grupo |
+| `DELETE` | `/api/groups/:id/shares/:shareId` | Dejar de compartir (el dueño) o quitarlo (el administrador) | `200` + grupo |
+| `POST`/`DELETE` | `/api/groups/:id/shares/:shareId/join` | Unirse / dejar de participar | `201`/`200` + grupo |
+| `GET` | `/api/groups/:id/shares/:shareId/ranking` | Resumen de cada participante por seguimiento (sin notas, con el límite semanal) | `200` + ranking |
+
+| Campo | Regla |
+|---|---|
+| `name` | Obligatorio, 1–40 caracteres; `description` opcional, máximo 200 |
+| `weeklyLimit` | Entero 1–50, o `null` (sin límite) |
+| `code` | 8 caracteres; se ignoran espacios, guiones y mayúsculas |
+
+Un grupo del que no sos miembro responde `404`; una acción de administrador
+hecha por un miembro, `403`.
 
 ### Errores
 
@@ -479,7 +559,7 @@ Los tests de integración usan una base SQLite propia por proceso
 (`prisma/test-<pid>.db`), creada con las mismas migraciones y borrada al
 terminar: nunca tocan `dev.db`. La app escucha en el puerto 0 (el sistema
 operativo asigna uno libre), así los tests pueden correr con el servidor de
-desarrollo levantado. Hay 226 tests; la lógica de planificación está cubierta
+desarrollo levantado. Hay 246 tests; la lógica de planificación está cubierta
 al 100%.
 
 ## Roadmap
@@ -490,4 +570,6 @@ al 100%.
 - [x] **v1.2 · Fase 2** — Objetivos: plan automático por semanas (por contenido o por fases), cuotas semanales, registro de sesiones, seguimiento y edición del plan
 - [x] **v1.3** — Pulido de objetivos (editar datos, cambiar el plazo, cerrar o abandonar) y seguimientos personales, agrupados en tableros y vinculables a objetivos
 - [x] **v1.4** — Login y múltiples usuarios: registro, sesiones propias con scrypt, la primera cuenta reclama los datos del invitado
-- [ ] **v1.5** — Grupos de amigos: se comparte un **tablero** con el grupo y cada miembro elige si **se une** (nadie queda adentro automáticamente). Al unirse, se le crean los mismos seguimientos vinculados, y el grupo ve un ranking por seguimiento. Nunca se comparten objetivos ni fechas límite
+- [x] **v1.5** — Grupos de amigos: tableros compartidos a los que cada miembro elige unirse (copias vinculadas), ranking por seguimiento, límite semanal anti-spam y administración del grupo
+- [ ] Límite de intentos de login (fuerza bruta)
+- [ ] Rangos con nombre en los seguimientos (escala ordinal, ej. rangos de CS2)
