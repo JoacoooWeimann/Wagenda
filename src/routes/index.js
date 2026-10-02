@@ -29,4 +29,9 @@ router.get('/trackers', requireAuth, (req, res) => {
   res.render('trackers', { title: 'Seguimientos' });
 });
 
+// ?join=CÓDIGO: el link de invitación abre la página con el código cargado
+router.get('/groups', requireAuth, (req, res) => {
+  res.render('groups', { title: 'Grupos' });
+});
+
 export default router;

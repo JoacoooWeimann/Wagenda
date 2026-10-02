@@ -4,18 +4,22 @@ import { hasErrors, parseId } from '../utiles/validation/common.js';
 import { validateTrackerCreate, validateTrackerUpdate, validateEntry } from '../utiles/validation/trackers.js';
 import { currentUserId } from '../utiles/currentUser.js';
 import { trackerSummary } from '../utiles/trackers.js';
+import { syncTrackerAdded, syncTrackerUpdated, detachTrackerCopies } from '../utiles/groups/sharing.js';
 
 const TRACKER_NOT_FOUND = 'Seguimiento no encontrado';
+// Copias de tableros compartidos: la estructura la define el dueño del original
+const COPY_READ_ONLY = 'Es parte de un tablero compartido: lo define su dueño';
 
 // Historial en orden cronológico; a igual fecha, en el orden en que se cargó
 const WITH_ENTRIES = { entries: { orderBy: [{ date: 'asc' }, { id: 'asc' }] } };
 
-// Un seguimiento solo va a un tablero propio. Devuelve los errores por campo,
-// o null si está bien (o no se pidió tablero).
+// Un seguimiento solo va a un tablero propio, y no a la copia de uno
+// compartido. Devuelve los errores por campo, o null si está bien (o no se pidió tablero).
 async function boardError(boardId, userId) {
   if (!boardId) return null;
   const board = await prisma.board.findFirst({ where: { id: boardId, userId } });
-  return board ? null : { boardId: 'Tablero no encontrado' };
+  if (!board) return { boardId: 'Tablero no encontrado' };
+  return board.sourceBoardId ? { boardId: COPY_READ_ONLY } : null;
 }
 
 const withSummary = (tracker) => ({ ...tracker, summary: trackerSummary(tracker.entries, tracker.higherIsBetter) });
@@ -54,9 +58,11 @@ export async function createTracker(req, res) {
   const badBoard = await boardError(data.boardId, userId);
   if (badBoard) return invalid(res, badBoard);
 
-  const tracker = await prisma.tracker.create({
-    data: { ...data, userId },
-    include: WITH_ENTRIES
+  // Si el tablero está compartido, los que se unieron reciben la copia
+  const tracker = await prisma.$transaction(async (tx) => {
+    const created = await tx.tracker.create({ data: { ...data, userId }, include: WITH_ENTRIES });
+    await syncTrackerAdded(tx, created);
+    return created;
   });
   res.status(201).json(withSummary(tracker));
 }
@@ -68,19 +74,31 @@ export async function updateTracker(req, res) {
 
   const tracker = await findTracker(req, res);
   if (!tracker) return;
+  if (tracker.sourceTrackerId) return invalid(res, { tracker: COPY_READ_ONLY });
   const badBoard = await boardError(data.boardId, tracker.userId);
   if (badBoard) return invalid(res, badBoard);
 
-  const updated = await prisma.tracker.update({ where: { id: tracker.id }, data, include: WITH_ENTRIES });
+  // Los cambios del original se replican en las copias de quienes se unieron
+  const updated = await prisma.$transaction(async (tx) => {
+    const after = await tx.tracker.update({ where: { id: tracker.id }, data, include: WITH_ENTRIES });
+    await syncTrackerUpdated(tx, tracker, after);
+    return after;
+  });
   res.json(withSummary(updated));
 }
 
-// Cascade: borra sus registros. Los objetivos vinculados quedan sin seguimiento (SetNull).
+// Cascade: borra sus registros. Los objetivos vinculados quedan sin seguimiento
+// (SetNull). Las copias de los demás no se borran: quedan como personales.
+// Una copia no se borra suelta (dejaría un hueco en el ranking): se sale del tablero.
 export async function deleteTracker(req, res) {
   const tracker = await findTracker(req, res);
   if (!tracker) return;
+  if (tracker.sourceTrackerId) return invalid(res, { tracker: COPY_READ_ONLY });
 
-  await prisma.tracker.delete({ where: { id: tracker.id } });
+  await prisma.$transaction(async (tx) => {
+    await detachTrackerCopies(tx, tracker.id);
+    await tx.tracker.delete({ where: { id: tracker.id } });
+  });
   res.json({ ok: true });
 }
 

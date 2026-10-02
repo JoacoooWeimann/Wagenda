@@ -40,6 +40,7 @@ export async function startTestServer() {
     await prisma.task.deleteMany();
     await prisma.tracker.deleteMany(); // cascade: sus registros
     await prisma.board.deleteMany();
+    await prisma.group.deleteMany(); // cascade: miembros, tableros compartidos y uniones
     await prisma.user.deleteMany({ where: { id: { not: 1 } } });
     await prisma.session.deleteMany();
     await prisma.user.upsert({

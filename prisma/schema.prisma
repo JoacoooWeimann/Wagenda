@@ -53,6 +53,8 @@ model User {
   goals    Goal[]
   trackers Tracker[]
   boards   Board[]
+  groups   GroupMember[]
+  joins    ShareJoin[]
 }
 
 model Goal {
@@ -134,8 +136,17 @@ model Board {
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId   Int
   trackers Tracker[]
+  shares   BoardShare[]
+
+  // Copia de un tablero compartido al que el usuario se unió. Mientras está
+  // vinculada, su estructura la define el dueño del original. SetNull: si el
+  // original desaparece, la copia queda como tablero personal, con sus datos.
+  sourceBoard   Board?  @relation("BoardCopies", fields: [sourceBoardId], references: [id], onDelete: SetNull)
+  sourceBoardId Int?
+  copies        Board[] @relation("BoardCopies")
 
   @@index([userId])
+  @@index([sourceBoardId])
 }
 
 // Algo que se mide en el tiempo, sin fecha límite (ej. "Press banca" en kg,
@@ -158,8 +169,14 @@ model Tracker {
   board   Board? @relation(fields: [boardId], references: [id], onDelete: SetNull)
   boardId Int?
 
+  // Copia vinculada a un seguimiento de un tablero compartido (ver Board.sourceBoardId)
+  sourceTracker   Tracker?  @relation("TrackerCopies", fields: [sourceTrackerId], references: [id], onDelete: SetNull)
+  sourceTrackerId Int?
+  copies          Tracker[] @relation("TrackerCopies")
+
   @@index([userId])
   @@index([boardId])
+  @@index([sourceTrackerId])
 }
 
 model TrackerEntry {
@@ -188,5 +205,72 @@ model Session {
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId Int
 
+  @@index([userId])
+}
+
+// --- Grupos -----------------------------------------------------------------
+// Un grupo de amigos. Se entra con el código de invitación. Entrar no comparte
+// nada: cada miembro elige a qué tableros compartidos unirse.
+
+enum GroupRole {
+  owner // el creador (o a quien se lo transfirió): administra el grupo
+  member
+}
+
+model Group {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  inviteCode  String   @unique
+  // Anti-spam: el grupo solo toma en cuenta los primeros N registros por
+  // semana de cada persona en cada seguimiento. null = sin límite.
+  weeklyLimit Int?
+  createdAt   DateTime @default(now())
+
+  members GroupMember[]
+  shares  BoardShare[]
+}
+
+model GroupMember {
+  id       Int       @id @default(autoincrement())
+  role     GroupRole @default(member)
+  joinedAt DateTime  @default(now())
+
+  group   Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId Int
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  Int
+
+  @@unique([groupId, userId])
+  @@index([userId])
+}
+
+// Un tablero (original, nunca una copia) compartido en un grupo
+model BoardShare {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  group   Group       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId Int
+  board   Board       @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  boardId Int
+  joins   ShareJoin[]
+
+  @@unique([groupId, boardId])
+  @@index([boardId])
+}
+
+// "Unirme": el usuario participa del tablero compartido EN ESTE grupo (si el
+// mismo tablero está en otro grupo, ahí no aparece salvo que se una también)
+model ShareJoin {
+  id       Int      @id @default(autoincrement())
+  joinedAt DateTime @default(now())
+
+  share   BoardShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  shareId Int
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  Int
+
+  @@unique([shareId, userId])
   @@index([userId])
 }

@@ -7,6 +7,7 @@ import taskRoutes from './routes/tasks.js';
 import goalRoutes from './routes/goals.js';
 import trackerRoutes from './routes/trackers.js';
 import boardRoutes from './routes/boards.js';
+import groupRoutes from './routes/groups.js';
 import { exposeCurrentPath } from './middlewares/locals.js';
 import { loadUser, requireAuth } from './middlewares/auth.js';
 import { notFound, errorHandler } from './middlewares/errors.js';
@@ -35,6 +36,7 @@ app.use(taskRoutes);
 app.use(goalRoutes);
 app.use(trackerRoutes);
 app.use(boardRoutes);
+app.use(groupRoutes);
 
 // Van después de las rutas: Express recorre los middlewares en orden de registro
 app.use(notFound);
