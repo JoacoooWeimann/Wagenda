@@ -116,12 +116,19 @@ describe('propiedad de los datos', () => {
 });
 
 describe('páginas', () => {
-  it('renderizan las vistas EJS con el link activo', async () => {
-    for (const [url, label] of [['/', 'Inicio'], ['/calendar', 'Calendario'], ['/goals', 'Objetivos']]) {
+  it('renderizan las vistas EJS con la sección activa en la navegación', async () => {
+    for (const url of ['/', '/calendar', '/goals', '/trackers', '/groups']) {
       const res = await ctx.request('GET', url);
       assert.equal(res.status, 200, url);
-      assert.match(res.body, new RegExp(`class="nav-link active"[^>]*>${label}<`), url);
+      assert.match(res.body, new RegExp(`class="app-nav-link active" href="${url}" aria-current="page"`), url);
+      assert.equal(res.body.match(/app-nav-link active/g).length, 1, url); // una sola activa
     }
+  });
+
+  it('sin sesión, la portada muestra el acceso y no las secciones', async () => {
+    const res = await ctx.request('GET', '/', undefined, { cookie: null });
+    assert.match(res.body, /app-public-header/);
+    assert.doesNotMatch(res.body, /app-nav-link/);
   });
 });
 

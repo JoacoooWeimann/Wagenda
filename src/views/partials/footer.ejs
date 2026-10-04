@@ -1,5 +1,8 @@
-<footer class="bg-dark text-light py-3 mt-auto">
+<%# Solo sin sesión (portada, login): dentro de la app ocupa lugar sin aportar %>
+<% if (!locals.user) { %>
+<footer class="app-footer py-3 mt-auto">
   <div class="container text-center">
     <p class="mb-0">&copy; <%= new Date().getFullYear() %> Wagenda</p>
   </div>
 </footer>
+<% } %>

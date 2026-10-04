@@ -1,37 +1,53 @@
 <%
-  // Las secciones con datos solo se muestran con sesión
-  const links = !locals.user ? [{ href: '/', label: 'Inicio' }] : [
-    { href: '/', label: 'Inicio' },
-    { href: '/calendar', label: 'Calendario' },
-    { href: '/goals', label: 'Objetivos' },
-    { href: '/trackers', label: 'Seguimientos' },
-    { href: '/groups', label: 'Grupos' }
+  // Secciones de la app. Una sola lista: el CSS (layout.css) la muestra como
+  // barra lateral en pantallas anchas y como barra inferior en el celular.
+  const links = [
+    { href: '/', label: 'Hoy', icon: 'bi-house-door' },
+    { href: '/calendar', label: 'Calendario', icon: 'bi-calendar3' },
+    { href: '/goals', label: 'Objetivos', icon: 'bi-bullseye' },
+    { href: '/trackers', label: 'Seguimientos', icon: 'bi-graph-up-arrow' },
+    { href: '/groups', label: 'Grupos', icon: 'bi-people' }
   ];
 %>
-<nav class="navbar navbar-expand-lg bg-body-tertiary" data-bs-theme="dark">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="/">Wagenda</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarLinks" aria-controls="navbarLinks" aria-expanded="false" aria-label="Abrir menú">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarLinks">
-      <div class="navbar-nav">
-        <% links.forEach(link => { const active = currentPath === link.href; %>
-          <a class="nav-link<%= active ? ' active' : '' %>" href="<%= link.href %>"<%- active ? ' aria-current="page"' : '' %>><%= link.label %></a>
-        <% }) %>
+<% if (locals.user) { %>
+  <%# Encabezado del celular: marca y menú de usuario (en pantallas anchas va en la barra lateral) %>
+  <header class="app-mobile-header">
+    <a class="app-brand" href="/"><img src="/img/logo.png" alt="" width="28" height="28"> Wagenda</a>
+    <details class="app-user-menu">
+      <summary aria-label="Menú de usuario"><i class="bi bi-person-circle" aria-hidden="true"></i></summary>
+      <div class="app-user-menu-panel">
+        <span><%= user.name %> <small>@<%= user.username %></small></span>
+        <form method="post" action="/logout"><button type="submit"><i class="bi bi-box-arrow-right" aria-hidden="true"></i> Salir</button></form>
       </div>
-      <%# Sesión: el usuario lo deja en res.locals el middleware loadUser %>
-      <div class="navbar-nav ms-auto align-items-lg-center">
-        <% if (locals.user) { %>
-          <span class="navbar-text me-lg-3"><%= user.name %> <small class="text-secondary">@<%= user.username %></small></span>
-          <form method="post" action="/logout" class="d-inline">
-            <button type="submit" class="btn btn-link nav-link">Salir</button>
-          </form>
-        <% } else { %>
-          <a class="nav-link<%= currentPath === '/login' ? ' active' : '' %>" href="/login">Ingresar</a>
-          <a class="nav-link<%= currentPath === '/register' ? ' active' : '' %>" href="/register">Crear cuenta</a>
-        <% } %>
-      </div>
+    </details>
+  </header>
+
+  <nav class="app-nav" aria-label="Secciones">
+    <a class="app-brand app-nav-brand" href="/"><img src="/img/logo.png" alt="" width="32" height="32"> Wagenda</a>
+    <ul>
+      <% links.forEach(link => { const active = currentPath === link.href; %>
+        <li>
+          <a class="app-nav-link<%= active ? ' active' : '' %>" href="<%= link.href %>"<%- active ? ' aria-current="page"' : '' %>>
+            <i class="bi <%= link.icon %>" aria-hidden="true"></i>
+            <span><%= link.label %></span>
+          </a>
+        </li>
+      <% }) %>
+    </ul>
+    <div class="app-nav-user">
+      <span class="app-nav-user-name"><%= user.name %> <small>@<%= user.username %></small></span>
+      <form method="post" action="/logout">
+        <button type="submit" class="app-nav-link"><i class="bi bi-box-arrow-right" aria-hidden="true"></i><span>Salir</span></button>
+      </form>
     </div>
-  </div>
-</nav>
+  </nav>
+<% } else { %>
+  <%# Sin sesión: solo la marca y el acceso; las secciones piden login %>
+  <header class="app-public-header">
+    <a class="app-brand" href="/"><img src="/img/logo.png" alt="" width="28" height="28"> Wagenda</a>
+    <div class="app-public-actions">
+      <a class="app-public-link<%= currentPath === '/login' ? ' active' : '' %>" href="/login">Ingresar</a>
+      <a class="btn btn-primary btn-sm" href="/register">Crear cuenta</a>
+    </div>
+  </header>
+<% } %>
