@@ -33,3 +33,15 @@ export const isMultiDay = (task) => task.startDate.slice(0, 10) !== task.endDate
 export function shortDate(iso) {
   return `${Number(iso.slice(8, 10))}/${Number(iso.slice(5, 7))}`;
 }
+
+// Objetivos en los que se puede registrar una sesión ese día: por fases, abiertos,
+// con el día dentro del plazo y que no sea futuro (una sesión es algo que ya pasó).
+// La usan el modal del calendario y la card del inicio.
+export function sessionGoalsFor(goals, dateKey, today) {
+  if (dateKey > today) return [];
+  return goals.filter(g =>
+    g.strategy === 'fases' &&
+    (g.status ?? 'activo') === 'activo' &&
+    g.startDate.slice(0, 10) <= dateKey && dateKey <= g.deadline.slice(0, 10)
+  );
+}

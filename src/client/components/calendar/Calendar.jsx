@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { buildCalendar, toDateKey, MESES, DIAS_SEMANA } from '../../utiles/calendar.js';
 import { getTasks, getGoals } from '../../utiles/api.js';
-import { dayInRange, highestPriority } from '../../utiles/tasks.js';
+import { dayInRange, highestPriority, sessionGoalsFor } from '../../utiles/tasks.js';
 import { todayKey } from '../../utiles/goals.js';
 import { ErrorBanner } from '../common.jsx';
 import { COLOR_PRIORIDAD } from './constants.js';
@@ -40,14 +40,6 @@ export default function Calendar({ initialYear, initialMonth }) {
   function goToday() { setYear(today.getFullYear()); setMonth(today.getMonth() + 1); }
 
   const tasksForDay = (day) => tasks.filter(t => dayInRange(year, month, day, t));
-
-  // Objetivos por fases cuyo plazo incluye ese día (y que no sea futuro)
-  function sessionGoalsFor(dateKey) {
-    if (dateKey > todayKey()) return [];
-    return goals.filter(g =>
-      g.strategy === 'fases' && g.startDate.slice(0, 10) <= dateKey && dateKey <= g.deadline.slice(0, 10)
-    );
-  }
 
   // useCallback: DayModal usa onClose en un efecto; una función nueva en cada
   // render volvería a registrar el listener de Escape sin necesidad
@@ -110,7 +102,7 @@ export default function Calendar({ initialYear, initialMonth }) {
           title={`${selectedDay} de ${MESES[month - 1]}, ${year}`}
           date={selectedKey}
           tasks={tasksForDay(selectedDay)}
-          sessionGoals={sessionGoalsFor(selectedKey)}
+          sessionGoals={sessionGoalsFor(goals, selectedKey, todayKey())}
           onClose={closeModal}
           onTaskSaved={handleTaskSaved}
           onTaskRemoved={handleTaskRemoved}

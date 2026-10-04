@@ -4,7 +4,10 @@ import { hasErrors } from '../utiles/validation/common.js';
 import { requireAuth } from '../middlewares/auth.js';
 const router = express.Router();
 
+// Con sesión, el inicio es la card del día; sin sesión, la portada.
+// ?date=YYYY-MM-DD (un día puntual) lo lee y valida el cliente.
 router.get('/', (req, res) => {
+  if (req.user) return res.render('home', { title: 'Hoy' });
   res.render('index', { title: 'Inicio' });
 });
 

@@ -125,6 +125,13 @@ describe('páginas', () => {
     }
   });
 
+  it('con sesión, el inicio es la card del día', async () => {
+    const res = await ctx.request('GET', '/?date=2026-10-05');
+    assert.equal(res.status, 200);
+    assert.match(res.body, /id="home-root"/);
+    assert.match(res.body, /\/build\/home\.js/);
+  });
+
   it('sin sesión, la portada muestra el acceso y no las secciones', async () => {
     const res = await ctx.request('GET', '/', undefined, { cookie: null });
     assert.match(res.body, /app-public-header/);

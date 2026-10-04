@@ -1,0 +1,99 @@
+/* Inicio: la card del día */
+.home-main {
+  max-width: 640px;
+  margin: 32px auto;
+  padding: 0 16px;
+}
+
+.day-card {
+  background: var(--wg-surface);
+  border: 1px solid var(--wg-border);
+  border-radius: var(--wg-radius);
+  box-shadow: var(--wg-shadow);
+  padding: 20px 24px 24px;
+  /* Deja el scroll vertical al navegador y el gesto horizontal a la card */
+  touch-action: pan-y;
+  overflow: hidden;
+}
+
+.day-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.day-card-title {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+.day-card-title h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.day-card-relative {
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 1px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--wg-text-muted);
+  background: var(--wg-surface-2);
+}
+.day-card-relative.is-today { color: var(--wg-accent); background: var(--wg-accent-soft); }
+
+.day-card-arrow {
+  flex-shrink: 0;
+  width: 44px;  /* objetivo táctil cómodo */
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--wg-border);
+  border-radius: 50%;
+  background: var(--wg-surface-2);
+  color: var(--wg-text);
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.day-card-arrow:hover { background: var(--wg-primary-soft); color: var(--wg-primary); }
+
+.day-card-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 18px;
+}
+.day-card-actions .goal-btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+
+/* En la card la lista no necesita alto máximo: la card crece */
+.day-card .calendar-task-list { max-height: none; }
+
+.day-empty {
+  color: var(--wg-text-subtle);
+  text-align: center;
+  margin: 8px 0 20px;
+}
+
+/* Transición al cambiar de día: entra desde el lado hacia el que se avanza */
+.day-slide-next { animation: day-in-from-right 0.18s ease-out; }
+.day-slide-prev { animation: day-in-from-left 0.18s ease-out; }
+@keyframes day-in-from-right { from { opacity: 0; transform: translateX(24px); } }
+@keyframes day-in-from-left { from { opacity: 0; transform: translateX(-24px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .day-slide-next, .day-slide-prev { animation: none; }
+}
+
+@media (max-width: 480px) {
+  .home-main { margin: 16px auto; padding: 0 12px; }
+  .day-card { padding: 16px; }
+  .day-card-title h1 { font-size: 1.15rem; }
+}
