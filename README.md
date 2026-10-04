@@ -13,8 +13,9 @@ ramas `develop` → `main` y decisiones técnicas documentadas.
 | Pieza | Rol | Por qué |
 |---|---|---|
 | **Node.js + Express 5** | Servidor HTTP y API REST | Express 5 manda automáticamente los errores de los handlers `async` al manejador de errores, sin `try/catch` en cada ruta |
-| **EJS** | Vistas renderizadas en el servidor | Las páginas simples (inicio, errores, login y registro) no necesitan JavaScript en el cliente |
-| **React** (como "islas") | El calendario y la página de objetivos | La interactividad está concentrada en dos widgets: React se monta en un `<div>` de cada vista EJS en vez de convertir todo en una SPA |
+| **EJS** | Vistas renderizadas en el servidor | Las páginas simples (portada, errores, login y registro) no necesitan JavaScript en el cliente |
+| **Bootstrap 5.3 + Bootstrap Icons** (CDN) | Base de estilos y los íconos de la navegación | En modo oscuro (`data-bs-theme="dark"`), con sus variables apuntadas a nuestra paleta. Solo el CSS: no se usa su JavaScript |
+| **React** (como "islas") | Inicio, calendario, objetivos, seguimientos y grupos | La interactividad está concentrada en dos widgets: React se monta en un `<div>` de cada vista EJS en vez de convertir todo en una SPA |
 | **Vite** | Compila el código de React | Un punto de entrada por isla (`app.js`, `goals.js`); React va en un chunk común que el navegador descarga una sola vez |
 | **Prisma 6 + SQLite** | Modelo de datos, migraciones y consultas | SQLite no necesita un servidor aparte. Prisma está fijado en la versión 6 porque la 7 cambia el flujo clásico de generación del cliente |
 | **node:test** | Tests unitarios y de integración | Viene incluido en Node: no suma dependencias |
@@ -85,9 +86,12 @@ src/
     trackers.js            Resumen de un seguimiento (función pura)
   views/                 Plantillas EJS
   public/                Archivos estáticos (CSS, imágenes, build de Vite)
+    css/main.css           Design tokens (la paleta) y estilos base
+    css/layout.css         Navegación: barra lateral o inferior
   client/                Todo lo que compila Vite (separado del backend)
-    main.jsx / goals.jsx / trackers.jsx / groups.jsx   Una entrada por isla
-    components/calendar/   Calendar, DayModal, TaskItem, TaskForm, SessionLogger
+    main.jsx / home.jsx / goals.jsx / trackers.jsx / groups.jsx   Una entrada por isla
+    components/home/       DayCard (la card del día del inicio)
+    components/calendar/   Calendar, DayModal, DayPanel, TaskItem, TaskForm, SessionLogger
     components/goals/      GoalsPage, GoalForm, GoalCard, PlanWeeks, GoalInfoForm, DeadlineForm
     components/trackers/   TrackersPage, BoardSection, TrackerCard, TrackerForm, Sparkline
     components/groups/     GroupsPage, GroupDetail, GroupForm, Ranking
@@ -450,6 +454,31 @@ Las rutas `/api/*` responden errores en JSON; las páginas responden la vista
 
 ## Decisiones técnicas
 
+### Design tokens y tema oscuro
+La paleta vive **solo** en `:root` de `main.css`, como variables CSS
+(`--wg-bg`, `--wg-surface`, `--wg-primary`, `--wg-danger`…). El resto del CSS
+(y hasta los puntos de prioridad del calendario, que se pintan desde JS) usa
+esas variables, así cambiar la paleta es editar un bloque. Bootstrap 5.3 lee sus
+colores de variables CSS (`--bs-body-bg`, `--bs-primary`…): se las apunta a
+nuestros tokens en vez de pelear con sus estilos. El texto sobre el turquesa es
+oscuro (`--wg-on-primary`), para mantener contraste.
+
+### Navegación
+Una sola lista de secciones (`partials/navigation.ejs`) que el CSS muestra como
+**barra lateral** en pantallas anchas y como **barra inferior** en el celular,
+siempre a un toque y sin menú hamburguesa. No usa JavaScript: el menú de
+usuario del celular es un `<details>`, y por eso ya no se carga el JS de Bootstrap.
+
+### El inicio: la card del día
+Con sesión, `/` muestra un día con sus tareas (`DayCard`), que se recorre como
+un carrusel: flechas, teclas ← →, o deslizando en el celular (pointer events
+con un umbral de 50 px, sin librería). El contenido del día es `DayPanel`, **el
+mismo componente** del modal del calendario: marcar, editar, borrar, agregar y
+registrar sesiones funcionan igual en los dos lugares. Las tareas se piden por
+mes y quedan en cache, así moverse dentro del mes no hace pedidos. La URL
+(`/?date=`) refleja el día, para recargar o compartir. Las fechas se mueven en
+UTC (`shiftDay`), así el horario de verano no corre el día.
+
 ### Fechas de calendario en UTC
 Una tarea de agenda tiene un **día**, no un **instante**. Las fechas viajan como
 `"YYYY-MM-DD"` y se guardan como **medianoche UTC** de ese día. El cliente
@@ -559,7 +588,7 @@ Los tests de integración usan una base SQLite propia por proceso
 (`prisma/test-<pid>.db`), creada con las mismas migraciones y borrada al
 terminar: nunca tocan `dev.db`. La app escucha en el puerto 0 (el sistema
 operativo asigna uno libre), así los tests pueden correr con el servidor de
-desarrollo levantado. Hay 246 tests; la lógica de planificación está cubierta
+desarrollo levantado. Hay 254 tests; la lógica de planificación está cubierta
 al 100%.
 
 ## Roadmap
@@ -571,5 +600,7 @@ al 100%.
 - [x] **v1.3** — Pulido de objetivos (editar datos, cambiar el plazo, cerrar o abandonar) y seguimientos personales, agrupados en tableros y vinculables a objetivos
 - [x] **v1.4** — Login y múltiples usuarios: registro, sesiones propias con scrypt, la primera cuenta reclama los datos del invitado
 - [x] **v1.5** — Grupos de amigos: tableros compartidos a los que cada miembro elige unirse (copias vinculadas), ranking por seguimiento, límite semanal anti-spam y administración del grupo
+- [x] **v2.0** — Rediseño: tema oscuro con design tokens, navegación lateral/inferior y el inicio con la card del día
+- [ ] Rediseño de las demás páginas (calendario, objetivos, seguimientos, grupos)
 - [ ] Límite de intentos de login (fuerza bruta)
 - [ ] Rangos con nombre en los seguimientos (escala ordinal, ej. rangos de CS2)
