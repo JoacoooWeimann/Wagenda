@@ -10,7 +10,7 @@
   margin: 8px 0 16px;
   font-size: 0.9rem;
 }
-.group-invite code { font-size: 1rem; letter-spacing: 0.1em; color: #2563eb; }
+.group-invite code { font-size: 1rem; letter-spacing: 0.1em; color: var(--wg-primary); }
 
 .group-subtitle { font-size: 1rem; font-weight: 600; margin: 16px 0 8px; }
 
@@ -22,20 +22,20 @@
   align-items: center;
   gap: 8px;
   padding: 6px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--wg-border);
   font-size: 0.9rem;
 }
-.group-members small, .group-ranking-user small { color: #999; }
-.group-members em { color: #2563eb; font-style: normal; font-size: 0.8rem; }
+.group-members small, .group-ranking-user small { color: var(--wg-text-subtle); }
+.group-members em { color: var(--wg-primary); font-style: normal; font-size: 0.8rem; }
 
-.goal-session-form select { padding: 6px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; }
-.goal-session-form input[type="text"] { padding: 6px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; }
-.goal-session-form .is-invalid { border-color: #dc2626; }
+.goal-session-form select { padding: 6px 10px; border: 1px solid var(--wg-border-strong); border-radius: 8px; font-size: 0.9rem; }
+.goal-session-form input[type="text"] { padding: 6px 10px; border: 1px solid var(--wg-border-strong); border-radius: 8px; font-size: 0.9rem; }
+.goal-session-form .is-invalid { border-color: var(--wg-danger); }
 
 .group-ranking { margin-top: 12px; }
 .group-ranking-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
 .group-ranking-tracker h4 { font-size: 0.95rem; margin: 12px 0 4px; }
-.group-ranking-tracker h4 small { color: #999; font-weight: 400; }
+.group-ranking-tracker h4 small { color: var(--wg-text-subtle); font-weight: 400; }
 .group-ranking-tracker ol { list-style: none; padding: 0; margin: 0; }
 .group-ranking-tracker li {
   display: flex;
@@ -45,6 +45,6 @@
   border-radius: 6px;
   font-size: 0.9rem;
 }
-.group-ranking-pos { width: 24px; color: #999; }
+.group-ranking-pos { width: 24px; color: var(--wg-text-subtle); }
 .group-ranking-user { flex: 1; }
-.group-ranking-me { background: #eff6ff; }
+.group-ranking-me { background: var(--wg-primary-soft); }

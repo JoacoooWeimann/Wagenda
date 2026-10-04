@@ -14,29 +14,29 @@
   min-width: 90px;
 }
 
-.tracker-stat-label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.03em; }
+.tracker-stat-label { font-size: 0.75rem; color: var(--wg-text-subtle); text-transform: uppercase; letter-spacing: 0.03em; }
 .tracker-summary strong { font-size: 1.25rem; }
-.tracker-stat-date { font-size: 0.8rem; color: #999; }
+.tracker-stat-date { font-size: 0.8rem; color: var(--wg-text-subtle); }
 
-.tracker-change-up { color: #15803d; }
-.tracker-change-down { color: #b91c1c; }
-.tracker-change-neutral { color: #666; }
+.tracker-change-up { color: var(--wg-success); }
+.tracker-change-down { color: var(--wg-danger); }
+.tracker-change-neutral { color: var(--wg-text-muted); }
 
 .tracker-sparkline {
   flex: 1 1 200px;
   max-width: 320px;
   height: 56px;
 }
-.tracker-sparkline polyline { fill: none; stroke: #2563eb; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.tracker-sparkline circle { fill: #2563eb; }
+.tracker-sparkline polyline { fill: none; stroke: var(--wg-primary); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.tracker-sparkline circle { fill: var(--wg-primary); }
 
 .tracker-entry-form { flex-wrap: wrap; }
 .tracker-entry-form input[type="number"] { width: 120px; }
 .tracker-entry-form input[type="text"] { flex: 1; min-width: 140px; }
-.tracker-entry-form input { padding: 6px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; }
-.tracker-entry-form .is-invalid { border-color: #dc2626; }
+.tracker-entry-form input { padding: 6px 10px; border: 1px solid var(--wg-border-strong); border-radius: 8px; font-size: 0.9rem; }
+.tracker-entry-form .is-invalid { border-color: var(--wg-danger); }
 
 .tracker-history li { gap: 10px; }
-.tracker-note { color: #666; font-size: 0.85rem; }
+.tracker-note { color: var(--wg-text-muted); font-size: 0.85rem; }
 
 .tracker-new-title { font-size: 1rem; margin: 0 0 8px; }

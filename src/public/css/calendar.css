@@ -2,10 +2,10 @@
   max-width: 700px;
   margin: 40px auto;
   padding: 24px;
-  background: #ffffff;
+  background: var(--wg-surface);
   border-radius: 16px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  box-shadow: var(--wg-shadow);
+  font-family: var(--wg-font);
 }
 
 .calendar-header {
@@ -27,22 +27,22 @@
   margin: 0;
   font-size: 1.4rem;
   font-weight: 600;
-  color: #333;
+  color: var(--wg-text);
 }
 
 .calendar-nav {
-  background: #f4f5f7;
+  background: var(--wg-surface-2);
   border: none;
   border-radius: 8px;
   padding: 8px 14px;
   font-size: 0.9rem;
-  color: #555;
+  color: var(--wg-text-muted);
   cursor: pointer;
   transition: background 0.15s ease;
 }
 
 .calendar-nav:hover {
-  background: #e4e6ea;
+  background: var(--wg-surface-3);
 }
 
 .calendar-table {
@@ -55,7 +55,7 @@
   padding: 10px 0;
   font-size: 0.8rem;
   font-weight: 500;
-  color: #999;
+  color: var(--wg-text-subtle);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -66,19 +66,19 @@
   height: 64px;
   vertical-align: middle;
   font-size: 0.95rem;
-  color: #444;
+  color: var(--wg-text);
   cursor: pointer;
   border-radius: 10px;
   transition: background 0.15s ease;
 }
 
 .calendar-table td:not(.calendar-empty):hover {
-  background: #f0f2f5;
+  background: var(--wg-surface-2);
 }
 
 .calendar-today {
-  background: #eaf2ff;
-  color: #2563eb;
+  background: var(--wg-primary-soft);
+  color: var(--wg-primary);
   font-weight: 600;
   border-radius: 10px;
 }
@@ -91,7 +91,7 @@
 .calendar-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--wg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -99,43 +99,43 @@
 }
 
 .calendar-modal {
-  background: #fff;
+  background: var(--wg-surface);
   border-radius: 14px;
   padding: 24px;
   width: 90%;
   max-width: 380px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--wg-shadow);
 }
 
 .calendar-modal h3 {
   margin: 0 0 12px;
   font-size: 1.1rem;
-  color: #333;
+  color: var(--wg-text);
 }
 
 .calendar-modal p {
-  color: #666;
+  color: var(--wg-text-muted);
   font-size: 0.9rem;
   margin-bottom: 20px;
 }
 
 .calendar-modal-close {
-  background: #f4f5f7;
+  background: var(--wg-surface-2);
   border: none;
   border-radius: 8px;
   padding: 8px 16px;
   cursor: pointer;
-  color: #555;
+  color: var(--wg-text-muted);
 }
 
 .calendar-modal-close:hover {
-  background: #e4e6ea;
+  background: var(--wg-surface-3);
 }
 
 .calendar-dot {
   width: 6px;
   height: 6px;
-  background: #2563eb;
+  background: var(--wg-primary);
   border-radius: 50%;
   margin: 2px auto 0;
 }
@@ -153,20 +153,20 @@
   align-items: center;
   gap: 8px;
   padding: 6px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--wg-border);
   font-size: 0.9rem;
 }
 
 .calendar-task-done span {
   text-decoration: line-through;
-  color: #aaa;
+  color: var(--wg-text-subtle);
 }
 
 .calendar-task-list button {
   margin-left: auto;
   background: none;
   border: none;
-  color: #bbb;
+  color: var(--wg-text-subtle);
   cursor: pointer;
 }
 
@@ -194,7 +194,7 @@
   width: 100%;
   box-sizing: border-box;
   padding: 8px 10px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--wg-border-strong);
   border-radius: 8px;
   font-size: 0.9rem;
 }
@@ -207,7 +207,7 @@
 .calendar-task-form-row label {
   flex: 1;
   font-size: 0.8rem;
-  color: #666;
+  color: var(--wg-text-muted);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -218,7 +218,7 @@
   width: 100%;
   box-sizing: border-box;
   padding: 6px 8px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--wg-border-strong);
   border-radius: 8px;
   font-size: 0.85rem;
 }
@@ -229,8 +229,8 @@
 }
 
 .calendar-task-form button {
-  background: #2563eb;
-  color: white;
+  background: var(--wg-primary);
+  color: var(--wg-on-primary);
   border: none;
   border-radius: 8px;
   padding: 10px 14px;
@@ -242,9 +242,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #b91c1c;
+  background: var(--wg-danger-soft);
+  border: 1px solid var(--wg-danger-border);
+  color: var(--wg-danger);
   border-radius: 8px;
   padding: 8px 12px;
   margin-bottom: 12px;
@@ -268,12 +268,12 @@
 }
 
 .calendar-field-error {
-  color: #dc2626;
+  color: var(--wg-danger);
   font-size: 0.75rem;
 }
 
 .calendar-task-form .is-invalid {
-  border-color: #dc2626 !important;
+  border-color: var(--wg-danger) !important;
 }
 
 .calendar-task-form button:disabled {
@@ -295,12 +295,12 @@
 }
 
 .calendar-task-range {
-  color: #888;
+  color: var(--wg-text-subtle);
   font-size: 0.8rem;
 }
 
 .calendar-task-description {
-  color: #999;
+  color: var(--wg-text-subtle);
   font-size: 0.8rem;
   white-space: nowrap;
   overflow: hidden;
@@ -317,11 +317,11 @@
 .calendar-task-list .calendar-task-confirm button {
   margin-left: 0;
   font-size: 0.8rem;
-  color: #555;
+  color: var(--wg-text-muted);
 }
 
 .calendar-task-list .calendar-task-confirm .calendar-task-confirm-delete {
-  color: #dc2626;
+  color: var(--wg-danger);
   font-weight: 600;
 }
 
@@ -329,7 +329,7 @@
   margin: 8px 0 0;
   font-size: 0.95rem;
   font-weight: 600;
-  color: #333;
+  color: var(--wg-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -339,7 +339,7 @@
   width: 100%;
   box-sizing: border-box;
   padding: 8px 10px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--wg-border-strong);
   border-radius: 8px;
   font-size: 0.9rem;
   font-family: inherit;
@@ -379,23 +379,23 @@
 .calendar-task-goal {
   align-self: flex-start;
   font-size: 0.75rem;
-  color: #2563eb;
-  background: #eaf2ff;
+  color: var(--wg-primary);
+  background: var(--wg-primary-soft);
   padding: 1px 6px;
   border-radius: 999px;
   text-decoration: none;
   margin-top: 2px;
 }
 
-.calendar-task-goal:hover { background: #dbe8ff; }
+.calendar-task-goal:hover { background: var(--wg-primary-soft-hover); }
 
 .calendar-session {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  background: var(--wg-success-soft);
+  border: 1px solid var(--wg-success-border);
   border-radius: 8px;
   padding: 8px 10px;
   margin-bottom: 12px;
@@ -404,15 +404,15 @@
 
 .calendar-session select {
   padding: 4px 6px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--wg-border-strong);
   border-radius: 6px;
   max-width: 100%;
 }
 
 .calendar-session button {
   margin-left: auto;
-  background: #16a34a;
-  color: #fff;
+  background: var(--wg-success);
+  color: var(--wg-on-primary);
   border: none;
   border-radius: 6px;
   padding: 6px 10px;

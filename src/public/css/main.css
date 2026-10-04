@@ -1,5 +1,128 @@
-body{
-    background-color: #063f41
+/* ==========================================================================
+   Design tokens: la paleta y las medidas comunes viven SOLO acá. El resto del
+   CSS usa estas variables, así cambiar la paleta es editar este bloque.
+   Tema oscuro: fondo casi negro verdoso, turquesa como color principal y
+   ámbar como acento.
+   ========================================================================== */
+:root {
+  /* Superficies (de atrás hacia adelante) */
+  --wg-bg: #0B1416;
+  --wg-surface: #13211F;        /* cards */
+  --wg-surface-2: #1A2C29;      /* inputs, botones secundarios, hover suave */
+  --wg-surface-3: #22383A;      /* hover de botones secundarios */
+  --wg-border: #24403B;         /* separadores */
+  --wg-border-strong: #2E4B46;  /* bordes de inputs */
+
+  /* Texto */
+  --wg-text: #E6EEED;
+  --wg-text-muted: #8FA3A0;     /* secundario */
+  --wg-text-subtle: #6B807C;    /* fechas, ayudas, deshabilitado */
+
+  /* Marca y estados */
+  --wg-primary: #2DD4BF;
+  --wg-primary-hover: #5EEAD4;
+  --wg-on-primary: #04201C;     /* texto sobre fondos de color (contraste AA) */
+  --wg-primary-soft: rgba(45, 212, 191, 0.12);
+  --wg-primary-soft-hover: rgba(45, 212, 191, 0.2);
+  --wg-accent: #FBBF24;
+  --wg-accent-soft: rgba(251, 191, 36, 0.14);
+  --wg-success: #4ADE80;
+  --wg-success-soft: rgba(74, 222, 128, 0.1);
+  --wg-success-border: rgba(74, 222, 128, 0.35);
+  --wg-danger: #F87171;
+  --wg-danger-soft: rgba(248, 113, 113, 0.12);
+  --wg-danger-border: rgba(248, 113, 113, 0.4);
+  --wg-muted-dot: #6B807C;      /* prioridad baja */
+
+  /* Forma */
+  --wg-radius: 16px;
+  --wg-radius-sm: 8px;
+  --wg-shadow: 0 2px 16px rgba(0, 0, 0, 0.35);
+  --wg-overlay: rgba(0, 0, 0, 0.6);
+  --wg-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Bootstrap 5.3 (data-bs-theme="dark") lee sus colores de variables CSS:
+     las apuntamos a la paleta para que sus componentes (formularios del login,
+     botones, alertas) se vean como el resto sin pelear con nuestro CSS. */
+  --bs-body-bg: var(--wg-bg);
+  --bs-body-color: var(--wg-text);
+  --bs-body-font-family: var(--wg-font);
+  --bs-secondary-color: var(--wg-text-muted);
+  --bs-tertiary-bg: var(--wg-surface);
+  --bs-border-color: var(--wg-border-strong);
+  --bs-link-color: var(--wg-primary);
+  --bs-link-color-rgb: 45, 212, 191;
+  --bs-link-hover-color: var(--wg-primary-hover);
+  --bs-link-hover-color-rgb: 94, 234, 212;
+  --bs-primary: var(--wg-primary);
+  --bs-primary-rgb: 45, 212, 191;
+  --bs-danger: var(--wg-danger);
+  --bs-danger-rgb: 248, 113, 113;
+  --bs-form-invalid-color: var(--wg-danger);
+  --bs-form-invalid-border-color: var(--wg-danger);
 }
+
+/* data-bs-theme="dark" redefine sus variables en [data-bs-theme=dark]: hay que
+   pisarlas con la misma especificidad */
+[data-bs-theme=dark] {
+  --bs-body-bg: var(--wg-bg);
+  --bs-body-color: var(--wg-text);
+  --bs-secondary-color: var(--wg-text-muted);
+  --bs-tertiary-bg: var(--wg-surface);
+  --bs-border-color: var(--wg-border-strong);
+  --bs-link-color: var(--wg-primary);
+  --bs-link-color-rgb: 45, 212, 191;
+  --bs-link-hover-color: var(--wg-primary-hover);
+  --bs-link-hover-color-rgb: 94, 234, 212;
+  --bs-form-invalid-color: var(--wg-danger);
+  --bs-form-invalid-border-color: var(--wg-danger);
+}
+
+body {
+  background-color: var(--wg-bg);
+  color: var(--wg-text);
+  font-family: var(--wg-font);
+}
+
+/* Inputs propios (los de Bootstrap ya tienen .form-control): fondo y texto del
+   tema. color-scheme: dark hace que el selector de fecha nativo también sea oscuro. */
+input:not(.form-control):not([type="checkbox"]):not([type="radio"]),
+select:not(.form-select),
+textarea:not(.form-control) {
+  background-color: var(--wg-surface-2);
+  color: var(--wg-text);
+  color-scheme: dark;
+}
+
+input::placeholder,
+textarea::placeholder { color: var(--wg-text-subtle); }
+
+input[type="checkbox"],
+input[type="radio"] { accent-color: var(--wg-primary); }
+
+/* Foco visible y del color de la marca (accesibilidad con teclado) */
+:focus-visible {
+  outline: 2px solid var(--wg-primary);
+  outline-offset: 2px;
+}
+
+/* Botón primario de Bootstrap con la paleta (login, registro, portada) */
+.btn-primary {
+  --bs-btn-bg: var(--wg-primary);
+  --bs-btn-border-color: var(--wg-primary);
+  --bs-btn-color: var(--wg-on-primary);
+  --bs-btn-hover-bg: var(--wg-primary-hover);
+  --bs-btn-hover-border-color: var(--wg-primary-hover);
+  --bs-btn-hover-color: var(--wg-on-primary);
+  --bs-btn-active-bg: var(--wg-primary-hover);
+  --bs-btn-active-color: var(--wg-on-primary);
+  font-weight: 600;
+}
+
 /* Login y registro */
-.auth-card { width: 100%; max-width: 400px; }
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--wg-surface);
+  border-color: var(--wg-border);
+}

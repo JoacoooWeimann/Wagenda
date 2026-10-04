@@ -1,3 +1,5 @@
 export const PRIORIDADES = ['baja', 'normal', 'alta'];
 export const ETIQUETA_PRIORIDAD = { baja: 'Baja', normal: 'Normal', alta: 'Alta' };
-export const COLOR_PRIORIDAD = { alta: '#ef4444', normal: '#2563eb', baja: '#9ca3af' };
+// Variables de la paleta (main.css): se usan en style={{ background }}, así
+// el punto de prioridad sigue al tema
+export const COLOR_PRIORIDAD = { alta: 'var(--wg-danger)', normal: 'var(--wg-primary)', baja: 'var(--wg-muted-dot)' };
