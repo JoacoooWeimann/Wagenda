@@ -1,25 +1,25 @@
 import { useState } from 'react';
 import {
   updateGroup, deleteGroup, regenerateCode, transferGroup, leaveGroup, kickMember,
-  shareBoard, unshareBoard, joinBoard, leaveBoard
+  shareTracker, unshareTracker, joinTracker, leaveTracker
 } from '../../utiles/api.js';
-import { inviteLink, shareableBoards } from '../../utiles/groups.js';
+import { inviteLink, shareableTrackers } from '../../utiles/groups.js';
 import GroupForm from './GroupForm.jsx';
 import Ranking from './Ranking.jsx';
 
-// Un grupo: invitación, miembros y tableros compartidos. Cada acción devuelve
+// Un grupo: invitación, miembros y seguimientos compartidos. Cada acción devuelve
 // el grupo actualizado desde el servidor (onChange); salir o borrar lo saca
 // de la lista (onGone).
-export default function GroupDetail({ group, boards, me, onChange, onGone, onError }) {
+export default function GroupDetail({ group, trackers, me, onChange, onGone, onError }) {
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(null); // 'delete' | 'leave' | { kick: userId } | { transfer: userId }
-  const [boardToShare, setBoardToShare] = useState('');
-  const [openRanking, setOpenRanking] = useState(null); // id del tablero compartido desplegado
+  const [toShare, setToShare] = useState('');
+  const [openRanking, setOpenRanking] = useState(null); // id del seguimiento compartido desplegado
   const [copied, setCopied] = useState(false);
 
   const isOwner = group.myRole === 'owner';
   const link = inviteLink(group.inviteCode, window.location.origin);
-  const available = shareableBoards(boards, group);
+  const available = shareableTrackers(trackers, group);
 
   async function run(action, errorPrefix) {
     try {
@@ -121,14 +121,15 @@ export default function GroupDetail({ group, boards, me, onChange, onGone, onErr
         ))}
       </ul>
 
-      <h3 className="group-subtitle">Tableros compartidos</h3>
-      {group.shares.length === 0 && <p className="goals-empty">Todavía nadie compartió un tablero.</p>}
+      <h3 className="group-subtitle">Seguimientos compartidos</h3>
+      {group.shares.length === 0 && <p className="goals-empty">Todavía nadie compartió un seguimiento.</p>}
       {group.shares.map(share => (
         <article key={share.id} className="goal-card">
           <div className="goal-card-header">
-            <h3>{share.board.name}</h3>
+            <h3>{share.tracker.name}</h3>
             <span className="goal-type">de @{share.owner.username}</span>
           </div>
+          {share.tracker.items.length > 0 && <p className="goal-meta">{share.tracker.items.join(' · ')}</p>}
           <p className="goal-meta">
             {share.participants} {share.participants === 1 ? 'participa' : 'participan'}
             {share.isMine ? ' · es tuyo' : share.joined ? ' · participás' : ''}
@@ -140,18 +141,18 @@ export default function GroupDetail({ group, boards, me, onChange, onGone, onErr
             </button>
             {!share.isMine && (share.joined
               ? <button type="button" className="goal-btn"
-                  onClick={() => run(() => leaveBoard(group.id, share.id), 'No se pudo salir del tablero')}>Dejar de participar</button>
+                  onClick={() => run(() => leaveTracker(group.id, share.id), 'No se pudo salir del seguimiento')}>Dejar de participar</button>
               : <button type="button" className="goal-btn-primary"
-                  onClick={() => run(() => joinBoard(group.id, share.id), 'No se pudo unir')}>Unirme</button>)}
+                  onClick={() => run(() => joinTracker(group.id, share.id), 'No se pudo unir')}>Unirme</button>)}
             {(share.isMine || isOwner) && (
               <button type="button" className="goal-btn"
-                onClick={() => run(() => unshareBoard(group.id, share.id), 'No se pudo quitar')}>
+                onClick={() => run(() => unshareTracker(group.id, share.id), 'No se pudo quitar')}>
                 {share.isMine ? 'Dejar de compartir' : 'Quitar del grupo'}
               </button>
             )}
           </div>
           {!share.isMine && !share.joined && (
-            <p className="goal-meta">Al unirte recibís una copia del tablero en tus Seguimientos. Lo que cargues es tuyo.</p>
+            <p className="goal-meta">Al unirte recibís una copia del seguimiento con sus ítems. Lo que cargues es tuyo.</p>
           )}
           {openRanking === share.id && <Ranking groupId={group.id} shareId={share.id} onError={onError} />}
         </article>
@@ -160,13 +161,13 @@ export default function GroupDetail({ group, boards, me, onChange, onGone, onErr
       {available.length > 0 && (
         <form className="goal-session-form" onSubmit={(e) => {
           e.preventDefault();
-          if (boardToShare) run(() => shareBoard(group.id, Number(boardToShare)), 'No se pudo compartir').then(() => setBoardToShare(''));
+          if (toShare) run(() => shareTracker(group.id, Number(toShare)), 'No se pudo compartir').then(() => setToShare(''));
         }}>
-          <select value={boardToShare} onChange={(e) => setBoardToShare(e.target.value)} aria-label="Tablero a compartir">
-            <option value="">Compartir un tablero tuyo…</option>
-            {available.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
+          <select value={toShare} onChange={(e) => setToShare(e.target.value)} aria-label="Seguimiento a compartir">
+            <option value="">Compartir un seguimiento tuyo…</option>
+            {available.map(t => <option key={t.id} value={String(t.id)}>{t.name}</option>)}
           </select>
-          <button type="submit" className="goal-btn-primary" disabled={!boardToShare}>Compartir</button>
+          <button type="submit" className="goal-btn-primary" disabled={!toShare}>Compartir</button>
         </form>
       )}
     </section>

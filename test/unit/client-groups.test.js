@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { sortRanking, rankingValue, inviteLink, shareableBoards } from '../../src/client/utiles/groups.js';
+import { sortRanking, rankingValue, inviteLink, shareableTrackers } from '../../src/client/utiles/groups.js';
 
 const row = (username, values) => ({
   user: { username },
@@ -49,9 +49,9 @@ describe('utilidades de grupos (cliente)', () => {
     assert.equal(inviteLink('ABCD2345', 'http://localhost:3000'), 'http://localhost:3000/groups?join=ABCD2345');
   });
 
-  it('shareableBoards: originales que no están compartidos en el grupo', () => {
-    const boards = [{ id: 1, sharedBy: null }, { id: 2, sharedBy: { username: 'x' } }, { id: 3, sharedBy: null }];
-    const group = { shares: [{ board: { id: 1 } }] };
-    assert.deepEqual(shareableBoards(boards, group).map(b => b.id), [3]);
+  it('shareableTrackers: originales que no están compartidos en el grupo', () => {
+    const trackers = [{ id: 1, sourceTrackerId: null }, { id: 2, sourceTrackerId: 9 }, { id: 3, sourceTrackerId: null }];
+    const group = { shares: [{ tracker: { id: 1 } }] };
+    assert.deepEqual(shareableTrackers(trackers, group).map(t => t.id), [3]);
   });
 });

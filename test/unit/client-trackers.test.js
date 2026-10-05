@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatValue, changeInfo, sparklinePoints, buildTrackerPayload, groupByBoard } from '../../src/client/utiles/trackers.js';
+import { formatValue, changeInfo, sparklinePoints } from '../../src/client/utiles/trackers.js';
 
 describe('utilidades de seguimientos (cliente)', () => {
   it('formatValue', () => {
@@ -29,20 +29,22 @@ describe('utilidades de seguimientos (cliente)', () => {
     assert.deepEqual(sparklinePoints([], 100, 40), []);
   });
 
-  it('buildTrackerPayload: sin tablero es null; con tablero, el id numérico', () => {
-    assert.equal(buildTrackerPayload({ name: 'a', kind: 'medicion', unit: '', higherIsBetter: true, boardId: '' }).boardId, null);
-    assert.equal(buildTrackerPayload({ name: 'a', kind: 'medicion', unit: '', higherIsBetter: true, boardId: '3' }).boardId, 3);
-    const activity = buildTrackerPayload({ name: 'Facultad', kind: 'actividad', unit: 'kg', higherIsBetter: false, boardId: '' });
-    assert.deepEqual(activity, { name: 'Facultad', kind: 'actividad', boardId: null }); // sin unidad ni "mejor es"
+  it('buildTrackerPayload y buildItemPayload: uno de actividad no manda unidad ni "mejor es"', async () => {
+    const { buildTrackerPayload, buildItemPayload } = await import('../../src/client/utiles/trackers.js');
+    assert.deepEqual(buildTrackerPayload({ name: 'Gimnasio', description: '', itemLabel: 'Ejercicio' }),
+      { name: 'Gimnasio', description: '', itemLabel: 'Ejercicio' });
+    assert.deepEqual(buildItemPayload({ name: 'Press', kind: 'medicion', unit: 'kg', higherIsBetter: true }),
+      { name: 'Press', kind: 'medicion', unit: 'kg', higherIsBetter: true });
+    assert.deepEqual(buildItemPayload({ name: 'Lógica', kind: 'actividad', unit: 'kg', higherIsBetter: false }),
+      { name: 'Lógica', kind: 'actividad' });
   });
 
-  it('groupByBoard: secciones en el orden de los tableros y los sueltos aparte', () => {
-    const boards = [{ id: 2, name: 'CS2' }, { id: 1, name: 'Gimnasio' }];
-    const trackers = [{ id: 10, boardId: 1 }, { id: 11, boardId: null }, { id: 12, boardId: 2 }, { id: 13, boardId: 1 }];
-    const { sections, loose } = groupByBoard(boards, trackers);
-    assert.deepEqual(sections.map(s => [s.board.name, s.trackers.map(t => t.id)]), [['CS2', [12]], ['Gimnasio', [10, 13]]]);
-    assert.deepEqual(loose.map(t => t.id), [11]);
-    assert.deepEqual(groupByBoard([], []).sections, []);
+  it('itemNoun y trackerPath', async () => {
+    const { itemNoun, trackerPath } = await import('../../src/client/utiles/trackers.js');
+    assert.equal(itemNoun({ itemLabel: 'Materia' }), 'Materia');
+    assert.equal(itemNoun({ itemLabel: null }), 'Ítem');
+    assert.equal(trackerPath({ name: 'Facultad' }, { name: 'Lógica' }), 'Facultad › Lógica');
+    assert.equal(trackerPath({ name: 'Facultad' }, null), 'Facultad');
   });
 });
 
@@ -62,16 +64,4 @@ describe('actividad (cliente)', () => {
     assert.equal(result.total, 11); // el histórico incluye lo de septiembre
   });
 
-  it('groupTrackerOptions: sin tablero primero, después por tablero', async () => {
-    const { groupTrackerOptions } = await import('../../src/client/utiles/trackers.js');
-    const options = [
-      { id: 1, name: 'Press', board: { id: 2, name: 'Gimnasio' } },
-      { id: 2, name: 'Facultad', board: null },
-      { id: 3, name: 'Rating', board: { id: 1, name: 'CS2' } },
-      { id: 4, name: 'Sentadilla', board: { id: 2, name: 'Gimnasio' } }
-    ];
-    const { loose, groups } = groupTrackerOptions(options);
-    assert.deepEqual(loose.map(o => o.id), [2]);
-    assert.deepEqual(groups.map(g => [g.name, g.options.map(o => o.id)]), [['CS2', [3]], ['Gimnasio', [1, 4]]]);
-  });
 });

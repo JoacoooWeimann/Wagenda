@@ -52,3 +52,20 @@
 .tracker-bars rect.is-current { fill: var(--wg-accent); opacity: 1; }
 .tracker-bars rect.is-empty { fill: var(--wg-border-strong); opacity: 1; }
 .tracker-bars text { fill: var(--wg-text-subtle); font-size: 9px; }
+
+/* Seguimiento (área) con sus ítems */
+.tracker-items { display: flex; flex-direction: column; gap: 12px; margin: 16px 0 12px; }
+
+.item-card {
+  padding: 14px 16px;
+  background: var(--wg-surface-2);
+  border: 1px solid var(--wg-border);
+  border-left: 4px solid var(--wg-primary);
+  border-radius: 12px;
+}
+.item-card.item-actividad { border-left-color: var(--wg-accent); }
+.item-card .tracker-summary { margin: 8px 0; }
+
+.item-card-header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.item-card-header h4 { margin: 0; font-size: 1rem; font-weight: 600; overflow-wrap: anywhere; }
+.item-kind { flex-shrink: 0; font-size: 0.75rem; color: var(--wg-text-muted); }

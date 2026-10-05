@@ -524,3 +524,5 @@
 .task-tag i { font-size: 0.65rem; }
 .tracker-picker-empty { font-size: 0.8rem; color: var(--wg-text-subtle); align-self: center; }
 .calendar-task-form-row select { min-width: 0; }
+/* Seguimiento + ítem: dos selects en la misma celda */
+.calendar-task-form-row .calendar-field:has(> select + select) { gap: 6px; }

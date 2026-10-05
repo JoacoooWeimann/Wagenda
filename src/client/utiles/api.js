@@ -55,19 +55,18 @@ export const logSession = (goalId, date, value) => request('POST', `/api/goals/$
 export const updateWeek = (goalId, weekId, changes) => request('PATCH', `/api/goals/${goalId}/weeks/${weekId}`, changes);
 export const addWeekTask = (goalId, weekId, title) => request('POST', `/api/goals/${goalId}/weeks/${weekId}/tasks`, { title });
 
-export const getBoards = () => request('GET', '/api/boards');
-export const createBoard = (board) => request('POST', '/api/boards', board);
-export const updateBoard = (id, changes) => request('PATCH', `/api/boards/${id}`, changes);
-export const deleteBoard = (id) => request('DELETE', `/api/boards/${id}`);
-
+// Seguimientos (áreas) y sus ítems
 export const getTrackers = () => request('GET', '/api/trackers');
 export const getTrackerOptions = () => request('GET', '/api/trackers/options');
 export const getTracker = (id) => request('GET', `/api/trackers/${id}`);
 export const createTracker = (tracker) => request('POST', '/api/trackers', tracker);
 export const updateTracker = (id, changes) => request('PATCH', `/api/trackers/${id}`, changes);
 export const deleteTracker = (id) => request('DELETE', `/api/trackers/${id}`);
-export const addEntry = (trackerId, entry) => request('POST', `/api/trackers/${trackerId}/entries`, entry);
-export const deleteEntry = (trackerId, entryId) => request('DELETE', `/api/trackers/${trackerId}/entries/${entryId}`);
+export const createItem = (trackerId, item) => request('POST', `/api/trackers/${trackerId}/items`, item);
+export const updateItem = (id, changes) => request('PATCH', `/api/items/${id}`, changes);
+export const deleteItem = (id) => request('DELETE', `/api/items/${id}`);
+export const addEntry = (itemId, entry) => request('POST', `/api/items/${itemId}/entries`, entry);
+export const deleteEntry = (itemId, entryId) => request('DELETE', `/api/items/${itemId}/entries/${entryId}`);
 
 export const getGroups = () => request('GET', '/api/groups');
 export const getGroup = (id) => request('GET', `/api/groups/${id}`);
@@ -79,8 +78,8 @@ export const regenerateCode = (id) => request('POST', `/api/groups/${id}/code`);
 export const transferGroup = (id, userId) => request('POST', `/api/groups/${id}/transfer`, { userId });
 export const leaveGroup = (id) => request('DELETE', `/api/groups/${id}/members/me`);
 export const kickMember = (id, userId) => request('DELETE', `/api/groups/${id}/members/${userId}`);
-export const shareBoard = (id, boardId) => request('POST', `/api/groups/${id}/shares`, { boardId });
-export const unshareBoard = (id, shareId) => request('DELETE', `/api/groups/${id}/shares/${shareId}`);
-export const joinBoard = (id, shareId) => request('POST', `/api/groups/${id}/shares/${shareId}/join`);
-export const leaveBoard = (id, shareId) => request('DELETE', `/api/groups/${id}/shares/${shareId}/join`);
+export const shareTracker = (id, trackerId) => request('POST', `/api/groups/${id}/shares`, { trackerId });
+export const unshareTracker = (id, shareId) => request('DELETE', `/api/groups/${id}/shares/${shareId}`);
+export const joinTracker = (id, shareId) => request('POST', `/api/groups/${id}/shares/${shareId}/join`);
+export const leaveTracker = (id, shareId) => request('DELETE', `/api/groups/${id}/shares/${shareId}/join`);
 export const getRanking = (id, shareId) => request('GET', `/api/groups/${id}/shares/${shareId}/ranking`);

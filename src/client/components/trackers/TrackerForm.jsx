@@ -2,16 +2,13 @@ import { useState } from 'react';
 import { buildTrackerPayload } from '../../utiles/trackers.js';
 import { FieldError } from '../common.jsx';
 
-// Crear o editar un seguimiento. `boardId` es el tablero donde se crea (null =
-// sin tablero); al editar, el select permite moverlo. `onSave(payload)` devuelve
-// una promesa que rechaza con los errores por campo del servidor.
-export default function TrackerForm({ tracker, boards = [], boardId = null, onSave, onCancel }) {
+// Crear o editar un seguimiento (un área: Gimnasio, Facultad…). `onSave`
+// devuelve una promesa que rechaza con los errores por campo del servidor.
+export default function TrackerForm({ tracker, onSave, onCancel }) {
   const [form, setForm] = useState({
     name: tracker?.name ?? '',
-    kind: tracker?.kind ?? 'medicion',
-    unit: tracker?.unit ?? '',
-    higherIsBetter: tracker?.higherIsBetter ?? true,
-    boardId: String((tracker ? tracker.boardId : boardId) ?? '')
+    itemLabel: tracker?.itemLabel ?? '',
+    description: tracker?.description ?? ''
   });
   const [fieldErrors, setFieldErrors] = useState({});
   const [busy, setBusy] = useState(false);
@@ -35,56 +32,23 @@ export default function TrackerForm({ tracker, boards = [], boardId = null, onSa
 
   const invalid = (name) => (fieldErrors[name] ? 'is-invalid' : '');
 
-  const isMeasure = form.kind === 'medicion';
-
   return (
     <form className="goal-form" onSubmit={handleSubmit} noValidate>
-      <fieldset className="goal-strategy tracker-kind">
-        <legend>Tipo</legend>
-        <label>
-          <input type="radio" name="kind" checked={isMeasure} onChange={() => updateField('kind', 'medicion')} />
-          <span><strong>Medición</strong> · cargás valores (kg, puntos, tiempo)</span>
-        </label>
-        <label>
-          <input type="radio" name="kind" checked={!isMeasure} onChange={() => updateField('kind', 'actividad')} />
-          <span><strong>Actividad</strong> · cuenta las tareas hechas (ej. Facultad)</span>
-        </label>
-        <FieldError message={fieldErrors.kind} />
-      </fieldset>
-
       <div className="goal-form-row">
         <label>Nombre
-          <input type="text" maxLength={40} placeholder={isMeasure ? 'Ej. Press banca, Rating Premier' : 'Ej. Facultad, Trabajo, Lectura'} autoFocus
+          <input type="text" maxLength={40} placeholder="Ej. Gimnasio, Facultad, Trabajo" autoFocus
             className={invalid('name')} value={form.name} onChange={(e) => updateField('name', e.target.value)} />
           <FieldError message={fieldErrors.name} />
         </label>
-        {isMeasure && (
-          <label>Unidad
-            <input type="text" maxLength={10} placeholder="kg, min, pts" className={invalid('unit')}
-              value={form.unit} onChange={(e) => updateField('unit', e.target.value)} />
-            <FieldError message={fieldErrors.unit} />
-          </label>
-        )}
-      </div>
-      <div className="goal-form-row">
-        {isMeasure && (
-          <label>Mejor es
-            <select value={form.higherIsBetter ? 'mas' : 'menos'} onChange={(e) => updateField('higherIsBetter', e.target.value === 'mas')}>
-              <option value="mas">Más (peso, puntos)</option>
-              <option value="menos">Menos (tiempo)</option>
-            </select>
-          </label>
-        )}
-        <label>Tablero
-          <select className={invalid('boardId')} value={form.boardId} onChange={(e) => updateField('boardId', e.target.value)}>
-            <option value="">Sin tablero</option>
-            {/* Las copias de tableros compartidos no reciben seguimientos propios */}
-            {boards.filter(b => !b.sharedBy).map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
-          </select>
-          <FieldError message={fieldErrors.boardId} />
+        <label>Sus ítems se llaman
+          <input type="text" maxLength={20} placeholder="Ej. Ejercicio, Materia, Proyecto" className={invalid('itemLabel')}
+            value={form.itemLabel} onChange={(e) => updateField('itemLabel', e.target.value)} />
+          <FieldError message={fieldErrors.itemLabel} />
         </label>
       </div>
-      <p className="goal-meta">Cualquier seguimiento puede tener tareas vinculadas: al elegirlo en una tarea, cuenta como actividad.</p>
+      <input type="text" maxLength={200} placeholder="Descripción (opcional)" className={invalid('description')}
+        value={form.description} onChange={(e) => updateField('description', e.target.value)} />
+      <FieldError message={fieldErrors.description} />
       <div className="goal-actions">
         <button type="submit" className="goal-btn-primary" disabled={busy}>
           {busy ? 'Guardando…' : tracker ? 'Guardar' : 'Crear seguimiento'}

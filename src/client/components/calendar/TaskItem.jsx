@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { isMultiDay, shortDate, categoryColor } from '../../utiles/tasks.js';
+import { trackerPath } from '../../utiles/trackers.js';
 import { ETIQUETA_PRIORIDAD } from './constants.js';
 
 // Una tarea como mini-card: borde izquierdo del color de su prioridad, check
@@ -28,11 +29,15 @@ export default function TaskItem({ task, onToggle, onEdit, onRemove }) {
         title={readOnly ? undefined : 'Editar'}>
         <div className="task-title-row">
           <span className="task-title">{task.title}</span>
-          {/* Etiqueta: el seguimiento al que suma; en tareas de un objetivo sin seguimiento, su tipo */}
-          {(task.tracker?.name ?? task.category) && (
-            <span className={`task-tag task-tag-${categoryColor(task.tracker?.name ?? task.category)}`}>
-              {task.tracker && <i className="bi bi-graph-up-arrow" aria-hidden="true" />} {task.tracker?.name ?? task.category}
+          {/* Etiqueta: el seguimiento (y el ítem) al que suma; el color es del
+              seguimiento, así todas las tareas de Facultad se ven iguales. En
+              tareas de un objetivo sin seguimiento, su tipo. */}
+          {task.tracker ? (
+            <span className={`task-tag task-tag-${categoryColor(task.tracker.name)}`}>
+              <i className="bi bi-graph-up-arrow" aria-hidden="true" /> {trackerPath(task.tracker, task.item)}
             </span>
+          ) : task.category && (
+            <span className={`task-tag task-tag-${categoryColor(task.category)}`}>{task.category}</span>
           )}
         </div>
 

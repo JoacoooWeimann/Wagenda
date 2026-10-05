@@ -44,11 +44,11 @@ export function rankingValue(row, mode) {
 // Link de invitación que se comparte con amigos
 export const inviteLink = (code, origin) => `${origin}/groups?join=${code}`;
 
-// Tableros que se pueden compartir en un grupo: los originales (no copias) que
-// todavía no están compartidos ahí
-export function shareableBoards(boards, group) {
-  const shared = new Set(group.shares.map(s => s.board.id));
-  return boards.filter(b => !b.sharedBy && !shared.has(b.id));
+// Seguimientos que se pueden compartir en un grupo: los originales (no copias)
+// que todavía no están compartidos ahí
+export function shareableTrackers(trackers, group) {
+  const shared = new Set(group.shares.map(s => s.tracker.id));
+  return trackers.filter(t => !t.sourceTrackerId && !shared.has(t.id));
 }
 
 // Lo que escribe el usuario en el campo del código (el servidor normaliza igual)

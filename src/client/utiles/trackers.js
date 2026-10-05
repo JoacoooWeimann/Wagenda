@@ -33,15 +33,16 @@ export function sparklinePoints(entries, width, height, pad = 4) {
 
 const round = (n) => Math.round(n * 10) / 10;
 
-// Body para crear o editar un seguimiento a partir del formulario.
-// boardId viaja como texto en el select: '' = sin tablero (null).
-// Un seguimiento de actividad no usa unidad ni "mejor es": no se mandan.
-export function buildTrackerPayload(form) {
-  const payload = {
-    name: form.name,
-    kind: form.kind,
-    boardId: form.boardId === '' ? null : Number(form.boardId)
-  };
+// Body de un seguimiento a partir del formulario
+export const buildTrackerPayload = (form) => ({
+  name: form.name,
+  description: form.description,
+  itemLabel: form.itemLabel
+});
+
+// Body de un ítem. Uno de actividad no usa unidad ni "mejor es": no se mandan.
+export function buildItemPayload(form) {
+  const payload = { name: form.name, kind: form.kind };
   if (form.kind === 'medicion') {
     payload.unit = form.unit;
     payload.higherIsBetter = form.higherIsBetter;
@@ -49,14 +50,8 @@ export function buildTrackerPayload(form) {
   return payload;
 }
 
-// Agrupa los seguimientos por tablero, en el orden de `boards`, más los que no
-// tienen tablero al final
-export function groupByBoard(boards, trackers) {
-  return {
-    sections: boards.map(board => ({ board, trackers: trackers.filter(t => t.boardId === board.id) })),
-    loose: trackers.filter(t => t.boardId === null)
-  };
-}
+// Cómo se llaman los ítems de un seguimiento ("Ejercicio"); si no se eligió, "Ítem"
+export const itemNoun = (tracker) => tracker?.itemLabel || 'Ítem';
 
 const DAY_MS = 86400000;
 const keyToTime = (key) => Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, Number(key.slice(8, 10)));
@@ -90,14 +85,5 @@ export function weeklyActivity(activity, today, weeks = 8) {
   };
 }
 
-// Opciones de seguimiento agrupadas por tablero (para <optgroup>): los que no
-// tienen tablero van primero, sin grupo
-export function groupTrackerOptions(options) {
-  const loose = options.filter(o => !o.board);
-  const boards = new Map();
-  for (const o of options.filter(o => o.board)) {
-    if (!boards.has(o.board.id)) boards.set(o.board.id, { name: o.board.name, options: [] });
-    boards.get(o.board.id).options.push(o);
-  }
-  return { loose, groups: [...boards.values()].sort((a, b) => a.name.localeCompare(b.name)) };
-}
+// "Gimnasio › Press banca" (o solo "Gimnasio" si no hay ítem)
+export const trackerPath = (tracker, item) => (item ? `${tracker.name} › ${item.name}` : tracker.name);

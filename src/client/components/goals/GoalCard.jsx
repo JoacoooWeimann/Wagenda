@@ -149,6 +149,9 @@ export default function GoalCard({ goal, today, trackers, onChange, onDelete, on
       </div>
       {editingInfo && <GoalInfoForm goal={goal} trackers={trackers} onSave={saveInfo} onCancel={() => setEditingInfo(false)} />}
       {goal.description && !editingInfo && <p className="goal-description">{goal.description}</p>}
+      {goal.item && !editingInfo && (
+        <p className="goal-meta"><i className="bi bi-graph-up-arrow" aria-hidden="true" /> Suma a {goal.item.tracker.name} › {goal.item.name}</p>
+      )}
       <p className="goal-meta">
         Fecha límite: {dayMonth(goal.deadline)} · {deadlineText(goal, today)}
       </p>
@@ -179,11 +182,11 @@ export default function GoalCard({ goal, today, trackers, onChange, onDelete, on
             min={goal.startDate.slice(0, 10)} max={maxSessionDate}
             onChange={(e) => setSessionDate(e.target.value)}
           />
-          {goal.tracker?.kind === 'medicion' && (
+          {goal.item?.kind === 'medicion' && (
             <input
               type="number" step="any" value={sessionValue} className="goal-session-value"
-              placeholder={`${goal.tracker.name}${goal.tracker.unit ? ` (${goal.tracker.unit})` : ''}`}
-              aria-label={`Medición de ${goal.tracker.name} (opcional)`}
+              placeholder={`${goal.item.name}${goal.item.unit ? ` (${goal.item.unit})` : ''}`}
+              aria-label={`Medición de ${goal.item.tracker.name} › ${goal.item.name} (opcional)`}
               onChange={(e) => setSessionValue(e.target.value)}
             />
           )}

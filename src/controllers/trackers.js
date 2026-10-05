@@ -71,7 +71,7 @@ export async function trackerOptions(req, res) {
     where: { userId: currentUserId(req) },
     orderBy: { name: 'asc' },
     select: {
-      id: true, name: true, itemLabel: true,
+      id: true, name: true, itemLabel: true, sourceTrackerId: true,
       items: { orderBy: { name: 'asc' }, select: { id: true, name: true, kind: true, unit: true } }
     }
   });

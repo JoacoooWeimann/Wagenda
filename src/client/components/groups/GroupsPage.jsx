@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getGroups, getGroup, createGroup, joinGroup, getBoards } from '../../utiles/api.js';
+import { getGroups, getGroup, createGroup, joinGroup, getTrackerOptions } from '../../utiles/api.js';
 import { normalizeCode } from '../../utiles/groups.js';
 import { ErrorBanner, FieldError } from '../common.jsx';
 import GroupForm from './GroupForm.jsx';
@@ -9,7 +9,7 @@ import GroupDetail from './GroupDetail.jsx';
 // elegido. El link de invitación (/groups?join=CÓDIGO) llega con el código cargado.
 export default function GroupsPage({ me }) {
   const [groups, setGroups] = useState(null); // null = todavía cargando
-  const [boards, setBoards] = useState([]);   // propios, para compartir
+  const [trackers, setTrackers] = useState([]); // propios, para compartir
   const [selected, setSelected] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [code, setCode] = useState(() => new URLSearchParams(window.location.search).get('join') ?? '');
@@ -21,7 +21,7 @@ export default function GroupsPage({ me }) {
       setError(`No se pudieron cargar los grupos: ${err.message}`);
       setGroups([]);
     });
-    getBoards().then(setBoards).catch(() => setBoards([]));
+    getTrackerOptions().then(setTrackers).catch(() => setTrackers([]));
   }, []);
 
   async function open(id) {
@@ -72,8 +72,8 @@ export default function GroupsPage({ me }) {
           {!showForm && <button type="button" className="goal-btn-primary" onClick={() => setShowForm(true)}>+ Nuevo grupo</button>}
         </div>
         <p className="goals-empty">
-          En un grupo cada uno elige qué tablero compartir y a cuáles unirse. Entrar a un grupo no comparte nada tuyo.
-          Los objetivos nunca se comparten.
+          En un grupo cada uno elige qué seguimiento compartir y a cuáles unirse. Entrar a un grupo no comparte nada
+          tuyo. Los objetivos nunca se comparten.
         </p>
 
         {groups === null && <p className="goals-empty">Cargando…</p>}
@@ -100,7 +100,7 @@ export default function GroupsPage({ me }) {
       </section>
 
       {selected && (
-        <GroupDetail key={selected.id} group={selected} boards={boards} me={me}
+        <GroupDetail key={selected.id} group={selected} trackers={trackers} me={me}
           onChange={handleChange} onGone={handleGone} onError={setError} />
       )}
     </div>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { GOAL_TYPES } from '../../utiles/goals.js';
 import { FieldError } from '../common.jsx';
-import TrackerSelect from './TrackerSelect.jsx';
+import ItemSelect from './ItemSelect.jsx';
 
 // Edición de los datos básicos (título, tipo, descripción y, en fases, el
 // seguimiento vinculado). La estrategia no se edita: define la estructura del
@@ -11,7 +11,7 @@ export default function GoalInfoForm({ goal, trackers = [], onSave, onCancel }) 
     title: goal.title,
     type: goal.type,
     description: goal.description ?? '',
-    trackerId: goal.trackerId ? String(goal.trackerId) : ''
+    itemId: goal.itemId ? String(goal.itemId) : ''
   });
   const isFases = goal.strategy === 'fases';
   const [fieldErrors, setFieldErrors] = useState({});
@@ -26,9 +26,9 @@ export default function GoalInfoForm({ goal, trackers = [], onSave, onCancel }) 
     e.preventDefault();
     setBusy(true);
     try {
-      const { trackerId, ...changes } = form;
+      const { itemId, ...changes } = form;
       // '' = ninguno (null desvincula); en contenido no se manda
-      await onSave(isFases ? { ...changes, trackerId: trackerId ? Number(trackerId) : null } : changes);
+      await onSave(isFases ? { ...changes, itemId: itemId ? Number(itemId) : null } : changes);
     } catch (err) {
       setFieldErrors(err.fields || {});
     } finally {
@@ -55,8 +55,8 @@ export default function GoalInfoForm({ goal, trackers = [], onSave, onCancel }) 
       </div>
       {isFases && (
         <div className="goal-form-row">
-          <TrackerSelect trackers={trackers} value={form.trackerId} error={fieldErrors.trackerId}
-            onChange={(value) => updateField('trackerId', value)} />
+          <ItemSelect trackers={trackers} value={form.itemId} error={fieldErrors.itemId}
+            onChange={(value) => updateField('itemId', value)} />
         </div>
       )}
       <textarea placeholder="Descripción (opcional)" maxLength={1000} rows={2} className={invalid('description')}

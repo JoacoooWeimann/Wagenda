@@ -4,7 +4,7 @@ import { FieldError } from '../common.jsx';
 import { PRIORIDADES, ETIQUETA_PRIORIDAD } from './constants.js';
 import TrackerPicker from '../trackers/TrackerPicker.jsx';
 
-const emptyForm = (date) => ({ title: '', description: '', startDate: date, endDate: date, priority: 'normal', trackerId: '' });
+const emptyForm = (date) => ({ title: '', description: '', startDate: date, endDate: date, priority: 'normal', trackerId: '', itemId: '' });
 
 const formFromTask = (task) => ({
   title: task.title,
@@ -12,7 +12,8 @@ const formFromTask = (task) => ({
   startDate: task.startDate.slice(0, 10),
   endDate: task.endDate.slice(0, 10),
   priority: task.priority,
-  trackerId: task.trackerId ? String(task.trackerId) : ''
+  trackerId: task.trackerId ? String(task.trackerId) : '',
+  itemId: task.itemId ? String(task.itemId) : ''
 });
 
 // Formulario de alta/edición. El componente padre lo monta con key = tarea en
@@ -37,11 +38,13 @@ export default function TaskForm({ date, editingTask, trackers = [], onSaved, on
       return;
     }
 
-    // El seguimiento viaja como id (o null = sin seguimiento)
+    // Seguimiento e ítem viajan como id (o null = ninguno)
+    const toId = (value) => (value === '' ? null : Number(value));
     const payload = {
       ...form,
       endDate: form.endDate || form.startDate,
-      trackerId: form.trackerId === '' ? null : Number(form.trackerId)
+      trackerId: toId(form.trackerId),
+      itemId: toId(form.itemId)
     };
     setSaving(true);
     onError(null);
@@ -95,9 +98,10 @@ export default function TaskForm({ date, editingTask, trackers = [], onSaved, on
           <FieldError message={fieldErrors.priority} />
         </div>
         <div className="calendar-field">
-          <TrackerPicker options={trackers} value={form.trackerId} className={invalid('trackerId')}
-            onChange={(value) => updateField('trackerId', value)} />
-          <FieldError message={fieldErrors.trackerId} />
+          <TrackerPicker options={trackers} trackerId={form.trackerId} itemId={form.itemId}
+            invalid={invalid('trackerId') || invalid('itemId')}
+            onChange={({ trackerId, itemId }) => { updateField('trackerId', trackerId); updateField('itemId', itemId); }} />
+          <FieldError message={fieldErrors.trackerId || fieldErrors.itemId} />
         </div>
       </div>
       <div className="calendar-task-form-actions">

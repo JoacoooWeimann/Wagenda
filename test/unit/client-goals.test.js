@@ -104,19 +104,19 @@ describe('helpers de objetivos (cliente)', () => {
       title: 'X', description: '', type: 'academico', strategy: 'divisible',
       startDate: '2026-10-05', deadline: '2026-11-08',
       contents: [{ name: 'Unidad', count: '6' }, { name: 'TP', count: '' }],
-      reviewWeek: false, sessionsPerWeek: '3', trackerId: '7'
+      reviewWeek: false, sessionsPerWeek: '3', itemId: '7'
     };
     const divisible = buildGoalPayload(form);
     assert.deepEqual(divisible.contents, [{ name: 'Unidad', count: 6 }, { name: 'TP', count: undefined }]);
     assert.equal(divisible.reviewWeek, false);
     assert.equal('sessionsPerWeek' in divisible, false);
-    assert.equal('trackerId' in divisible, false);
+    assert.equal('itemId' in divisible, false);
 
     const fases = buildGoalPayload({ ...form, strategy: 'fases' });
     assert.equal(fases.sessionsPerWeek, 3);
-    assert.equal(fases.trackerId, 7);
+    assert.equal(fases.itemId, 7);
     assert.equal('contents' in fases, false);
-    assert.equal('trackerId' in buildGoalPayload({ ...form, strategy: 'fases', trackerId: '' }), false);
+    assert.equal('itemId' in buildGoalPayload({ ...form, strategy: 'fases', itemId: '' }), false);
   });
 
   it('calendarLink apunta al mes más útil', () => {
