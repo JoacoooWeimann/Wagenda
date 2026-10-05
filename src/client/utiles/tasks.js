@@ -19,11 +19,13 @@ export function highestPriority(tasks) {
   return null;
 }
 
-// Pendientes primero y, dentro de cada grupo, de mayor a menor prioridad.
-// sort es estable: los empates conservan el orden por startDate que manda el servidor.
+// Pendientes primero; dentro de cada grupo, las que tienen horario por hora
+// (antes que las que no), y después de mayor a menor prioridad. sort es
+// estable: los empates conservan el orden por startDate que manda el servidor.
+const timeKey = (t) => (t.startMinute === null || t.startMinute === undefined ? Infinity : t.startMinute);
 export function sortForDay(tasks) {
   return [...tasks].sort((a, b) =>
-    (a.done - b.done) || (ORDEN_PRIORIDAD[a.priority] - ORDEN_PRIORIDAD[b.priority])
+    (a.done - b.done) || (timeKey(a) - timeKey(b)) || (ORDEN_PRIORIDAD[a.priority] - ORDEN_PRIORIDAD[b.priority])
   );
 }
 

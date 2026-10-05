@@ -4,6 +4,7 @@
 // `fields` los errores por campo (vacío si todo es válido).
 import { parseDateOnly } from '../dates.js';
 import { optionalText, requiredText } from './common.js';
+import { DAY_MINUTES } from '../schedule/slots.js';
 
 export { parseId } from './common.js';
 
@@ -36,6 +37,15 @@ function validateTask(body, { partial }) {
     if (!has(key)) continue;
     if (body[key] === null || (Number.isInteger(body[key]) && body[key] > 0)) data[key] = body[key];
     else fields[key] = key === 'trackerId' ? 'Seguimiento inválido' : 'Ítem inválido';
+  }
+
+  // Horario: minutos desde las 00:00, o null para quitarlo. Que vengan los dos,
+  // en orden y en una tarea de un día lo controla checkTaskTimes (necesita lo
+  // guardado, en un PATCH).
+  for (const key of ['startMinute', 'endMinute']) {
+    if (!has(key)) continue;
+    if (body[key] === null || (Number.isInteger(body[key]) && body[key] >= 0 && body[key] <= DAY_MINUTES)) data[key] = body[key];
+    else fields[key] = 'Horario inválido';
   }
 
   if (has('priority')) {
@@ -82,6 +92,29 @@ export function validateTaskUpdate(body = {}) {
     result.error = 'No hay campos para actualizar';
   }
   return result;
+}
+
+// Horario de la tarea como queda (lo guardado + lo nuevo). Reglas: los dos o
+// ninguno, el fin después del inicio, y solo en tareas de un día. Si la tarea
+// pasa a ser de varios días sin que se pida un horario (ej. al mover un
+// contenido a otra semana), el horario se borra solo. Completa `data` y
+// devuelve los errores por campo.
+export function checkTaskTimes(data, current, start, end) {
+  const fields = {};
+  const asked = data.startMinute !== undefined || data.endMinute !== undefined;
+  const startMinute = data.startMinute !== undefined ? data.startMinute : current.startMinute ?? null;
+  const endMinute = data.endMinute !== undefined ? data.endMinute : current.endMinute ?? null;
+  const multiDay = start.getTime() !== end.getTime();
+
+  if (startMinute === null && endMinute === null) return fields;
+  if (multiDay) {
+    if (asked) fields.startMinute = 'Solo las tareas de un día tienen horario';
+    else Object.assign(data, { startMinute: null, endMinute: null });
+    return fields;
+  }
+  if (startMinute === null || endMinute === null) fields.startMinute = 'Indicá el inicio y el fin';
+  else if (endMinute <= startMinute) fields.endMinute = 'El fin tiene que ser después del inicio';
+  return fields;
 }
 
 // Se exporta aparte porque en PATCH una de las dos fechas puede venir de la

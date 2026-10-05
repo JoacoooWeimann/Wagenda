@@ -132,3 +132,27 @@ describe('validateMonthQuery', () => {
     assert.ok(fields.year && fields.month);
   });
 });
+
+describe('checkTaskTimes', () => {
+  it('los dos o ninguno, en orden y solo en tareas de un día', async () => {
+    const { checkTaskTimes } = await import('../../src/utiles/validation/tasks.js');
+    const day = new Date('2026-10-05T00:00:00Z');
+    const later = new Date('2026-10-07T00:00:00Z');
+    assert.deepEqual(checkTaskTimes({ startMinute: 540, endMinute: 600 }, {}, day, day), {});
+    assert.deepEqual(checkTaskTimes({}, {}, day, day), {}); // sin horario
+    assert.ok(checkTaskTimes({ startMinute: 540 }, {}, day, day).startMinute);
+    assert.ok(checkTaskTimes({ startMinute: 600, endMinute: 540 }, {}, day, day).endMinute);
+    assert.ok(checkTaskTimes({ startMinute: 540, endMinute: 600 }, {}, day, later).startMinute);
+    // PATCH: cambia solo el fin; el inicio sale de lo guardado
+    assert.deepEqual(checkTaskTimes({ endMinute: 660 }, { startMinute: 540, endMinute: 600 }, day, day), {});
+  });
+
+  it('si la tarea pasa a ser de varios días sin pedir horario, se lo saca', async () => {
+    const { checkTaskTimes } = await import('../../src/utiles/validation/tasks.js');
+    const data = {};
+    const fields = checkTaskTimes(data, { startMinute: 540, endMinute: 600 },
+      new Date('2026-10-05T00:00:00Z'), new Date('2026-10-11T00:00:00Z'));
+    assert.deepEqual(fields, {});
+    assert.deepEqual(data, { startMinute: null, endMinute: null });
+  });
+});

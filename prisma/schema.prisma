@@ -113,6 +113,10 @@ model Task {
   // Solo la completa el sistema en las tareas de un objetivo (su tipo, ej.
   // "Académico"). Para clasificar sus tareas, el usuario elige un seguimiento.
   category    String?
+  // Horario opcional, solo en tareas de un día: minutos desde las 00:00
+  // (los dos o ninguno). Una tarea sin horario va a "Sin horario" en la agenda.
+  startMinute Int?
+  endMinute   Int?
   createdAt   DateTime @default(now())
 
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)

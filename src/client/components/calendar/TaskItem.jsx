@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { isMultiDay, shortDate, categoryColor } from '../../utiles/tasks.js';
 import { trackerPath } from '../../utiles/trackers.js';
+import { minutesToTime } from '../../utiles/week.js';
 import { ETIQUETA_PRIORIDAD } from './constants.js';
 
 // Una tarea como mini-card: borde izquierdo del color de su prioridad, check
@@ -44,6 +45,11 @@ export default function TaskItem({ task, onToggle, onEdit, onRemove }) {
         {task.description && <p className="task-description">{task.description}</p>}
 
         <div className="task-chips">
+          {task.startMinute !== null && task.startMinute !== undefined && (
+            <span className="task-chip task-chip-time">
+              <i className="bi bi-clock" aria-hidden="true" /> {minutesToTime(task.startMinute)}–{minutesToTime(task.endMinute)}
+            </span>
+          )}
           {task.priority === 'alta' && !task.done && (
             <span className="task-chip task-chip-alta"><i className="bi bi-exclamation-circle" aria-hidden="true" /> {ETIQUETA_PRIORIDAD.alta}</span>
           )}

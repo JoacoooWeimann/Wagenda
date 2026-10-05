@@ -5,17 +5,24 @@ import { ErrorBanner } from '../common.jsx';
 import TaskItem from './TaskItem.jsx';
 import TaskForm from './TaskForm.jsx';
 import SessionLogger from './SessionLogger.jsx';
+import DayAgenda from '../home/DayAgenda.jsx';
+import { buildDayAgenda } from '../../utiles/agenda.js';
 
 // Contenido de un día: sus tareas (marcar, editar, borrar), registrar sesiones
 // y el formulario de alta/edición, que está cerrado hasta que se pide
-// ("+ Nueva tarea" o click en una tarea para editarla). Lo usan el modal del calendario y la card
+// ("+ Nueva tarea" o click en una tarea para editarla). Con `agenda` (la franja
+// y la rutina de ese día, en la card del inicio), las tareas con horario se ven
+// en una línea de tiempo y abajo van las que no tienen; sin agenda (el modal
+// del calendario), una sola lista. Lo usan el modal del calendario y la card
 // del inicio: un solo componente para lo mismo. Se monta con key = fecha, así
 // al cambiar de día el estado (edición, errores) arranca limpio.
-export default function DayPanel({ date, tasks, sessionGoals, trackers, onTaskSaved, onTaskRemoved }) {
+export default function DayPanel({ date, tasks, sessionGoals, trackers, agenda, onTaskSaved, onTaskRemoved }) {
   const [editingTask, setEditingTask] = useState(null);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(false); // false | { times? }: horario inicial desde un hueco libre
   const [error, setError] = useState(null);
-  const formOpen = adding || editingTask !== null;
+  const formOpen = adding !== false || editingTask !== null;
+  const dayAgenda = agenda && buildDayAgenda({ window: agenda.window, routine: agenda.routine, tasks });
+  const listed = dayAgenda ? dayAgenda.untimed : tasks;
 
   function closeForm() {
     setAdding(false);
@@ -54,11 +61,17 @@ export default function DayPanel({ date, tasks, sessionGoals, trackers, onTaskSa
     <>
       <ErrorBanner message={error} onClose={() => setError(null)} />
 
-      {tasks.length === 0
-        ? <p className="day-empty">No hay tareas para este día.</p>
+      {dayAgenda && (
+        <DayAgenda agenda={dayAgenda} onToggle={toggleDone} onEdit={startEdit}
+          onAddAt={(times) => { setEditingTask(null); setAdding({ times }); }} />
+      )}
+      {dayAgenda && <h4 className="day-section-title">Sin horario</h4>}
+
+      {listed.length === 0
+        ? <p className="day-empty">{dayAgenda ? 'Nada sin horario.' : 'No hay tareas para este día.'}</p>
         : (
           <ul className="calendar-task-list">
-            {sortForDay(tasks).map(task => (
+            {sortForDay(listed).map(task => (
               <TaskItem key={task.id} task={task} onToggle={toggleDone} onEdit={startEdit} onRemove={removeTask} />
             ))}
           </ul>
@@ -70,16 +83,17 @@ export default function DayPanel({ date, tasks, sessionGoals, trackers, onTaskSa
 
       {formOpen ? (
         <TaskForm
-          key={editingTask?.id ?? 'nueva'}
+          key={editingTask?.id ?? `nueva-${adding?.times?.startMinute ?? ''}`}
           date={date}
           editingTask={editingTask}
+          initialTimes={adding?.times}
           trackers={trackers}
           onSaved={handleSaved}
           onCancel={closeForm}
           onError={setError}
         />
       ) : (
-        <button type="button" className="day-add-task" onClick={() => setAdding(true)}>
+        <button type="button" className="day-add-task" onClick={() => setAdding({})}>
           <i className="bi bi-plus-lg" aria-hidden="true" /> Nueva tarea
         </button>
       )}

@@ -526,3 +526,12 @@
 .calendar-task-form-row select { min-width: 0; }
 /* Seguimiento + ítem: dos selects en la misma celda */
 .calendar-task-form-row .calendar-field:has(> select + select) { gap: 6px; }
+.task-chip-time { color: var(--wg-text); background: var(--wg-surface-3); font-variant-numeric: tabular-nums; }
+.calendar-task-form input[type="time"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--wg-border-strong);
+  border-radius: 8px;
+  font-size: 0.85rem;
+}

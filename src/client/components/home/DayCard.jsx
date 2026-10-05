@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { getTasks, getGoals, getTrackerOptions } from '../../utiles/api.js';
+import { getTasks, getGoals, getTrackerOptions, getWeek } from '../../utiles/api.js';
 import { dayInRange, sessionGoalsFor } from '../../utiles/tasks.js';
 import { shiftDay, dayTitle, relativeLabel, monthOf } from '../../utiles/calendar.js';
 import { ErrorBanner } from '../common.jsx';
@@ -9,6 +9,12 @@ import DayPreview from './DayPreview.jsx';
 const SWIPE_MIN_PX = 50;
 const monthKey = (key) => key.slice(0, 7); // "2026-10"
 const isTyping = (el) => el?.closest?.('input, textarea, select, [contenteditable]');
+
+// Franja y rutina del día de la semana de una fecha "YYYY-MM-DD" (lunes = 0)
+function agendaFor(week, key) {
+  const weekday = (new Date(`${key}T00:00:00Z`).getUTCDay() + 6) % 7;
+  return { window: week.windows[weekday], routine: week.routine.filter(b => b.weekday === weekday) };
+}
 
 // Card del inicio: un día con sus tareas, que se recorre como un carrusel
 // (flechas, teclas ← →, o deslizando en el celular). El contenido del día es
@@ -20,6 +26,7 @@ export default function DayCard({ initialDate, today }) {
   const [months, setMonths] = useState({});         // cache de tareas por mes: { "2026-10": [...] }
   const [goals, setGoals] = useState([]);
   const [trackers, setTrackers] = useState([]); // para clasificar tareas
+  const [week, setWeek] = useState(null);       // franjas y rutina: la agenda del día
   const [error, setError] = useState(null);
   const pointerStart = useRef(null);
 
@@ -59,6 +66,8 @@ export default function DayCard({ initialDate, today }) {
   useEffect(() => {
     getGoals().then(setGoals).catch(() => setGoals([]));
     getTrackerOptions().then(setTrackers).catch(() => setTrackers([]));
+    // Si falla, la card funciona como lista (sin línea de tiempo)
+    getWeek().then(setWeek).catch(() => setWeek(null));
   }, []);
 
   // La URL refleja el día: recargar o compartir el link abre el mismo
@@ -159,6 +168,7 @@ export default function DayCard({ initialDate, today }) {
                 tasks={dayTasks}
                 sessionGoals={sessionGoalsFor(goals, date, today)}
               trackers={trackers}
+              agenda={week && agendaFor(week, date)}
                 onTaskSaved={handleTaskSaved}
                 onTaskRemoved={handleTaskRemoved}
               />

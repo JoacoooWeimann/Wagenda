@@ -10,6 +10,7 @@ import {
   validateTaskUpdate,
   validateMonthQuery,
   checkDateOrder,
+  checkTaskTimes,
   parseId
 } from '../utiles/validation/tasks.js';
 
@@ -62,6 +63,9 @@ export async function getTasksForMonth(req, res) {
 export async function createTask(req, res) {
   const { data, fields } = validateTaskCreate(req.body);
   if (hasErrors(fields)) return invalid(res, fields);
+
+  const times = checkTaskTimes(data, {}, data.startDate, data.endDate);
+  if (hasErrors(times)) return invalid(res, times);
 
   const userId = currentUserId(req);
   const badTracker = await resolveTracker(data, userId);
@@ -120,6 +124,8 @@ export async function updateTask(req, res) {
   const end = data.endDate ?? current.endDate;
   const dateErrors = checkDateOrder(start, end, {});
   if (hasErrors(dateErrors)) return invalid(res, dateErrors);
+  const times = checkTaskTimes(data, current, start, end);
+  if (hasErrors(times)) return invalid(res, times);
 
   // Tarea de un plan: no se edita si el objetivo está cerrado, y sus fechas
   // determinan en qué semana está

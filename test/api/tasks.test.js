@@ -169,3 +169,31 @@ describe('errores generales', () => {
     assert.match(res.type, /text\/html/);
   });
 });
+
+describe('tareas con horario', () => {
+  it('se crean con horario, se edita y se quita; viajan en minutos', async () => {
+    const created = await ctx.request('POST', '/api/tasks', { title: 'Estudiar', startDate: '2026-10-05', startMinute: 1020, endMinute: 1080 });
+    assert.equal(created.status, 201);
+    assert.deepEqual([created.body.startMinute, created.body.endMinute], [1020, 1080]);
+
+    const moved = await ctx.request('PATCH', `/api/tasks/${created.body.id}`, { endMinute: 1110 });
+    assert.equal(moved.body.endMinute, 1110);
+    const cleared = await ctx.request('PATCH', `/api/tasks/${created.body.id}`, { startMinute: null, endMinute: null });
+    assert.deepEqual([cleared.body.startMinute, cleared.body.endMinute], [null, null]);
+  });
+
+  it('valida el horario y que sea de un día', async () => {
+    const res = await ctx.request('POST', '/api/tasks', { title: 'x', startDate: '2026-10-05', startMinute: 600 });
+    assert.ok(res.body.fields.startMinute);
+    const multi = await ctx.request('POST', '/api/tasks', { title: 'x', startDate: '2026-10-05', endDate: '2026-10-06', startMinute: 600, endMinute: 660 });
+    assert.match(multi.body.fields.startMinute, /un día/);
+    assert.ok((await ctx.request('POST', '/api/tasks', { title: 'x', startDate: '2026-10-05', startMinute: 2000, endMinute: 2100 })).body.fields.startMinute);
+  });
+
+  it('al pasarla a varios días (ej. moverla de semana) pierde el horario', async () => {
+    const created = await ctx.request('POST', '/api/tasks', { title: 'x', startDate: '2026-10-05', startMinute: 600, endMinute: 660 });
+    const res = await ctx.request('PATCH', `/api/tasks/${created.body.id}`, { endDate: '2026-10-11' });
+    assert.equal(res.status, 200);
+    assert.deepEqual([res.body.startMinute, res.body.endMinute], [null, null]);
+  });
+});

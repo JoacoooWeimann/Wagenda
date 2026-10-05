@@ -3,8 +3,14 @@ import { createTask, updateTask } from '../../utiles/api.js';
 import { FieldError } from '../common.jsx';
 import { PRIORIDADES, ETIQUETA_PRIORIDAD } from './constants.js';
 import TrackerPicker from '../trackers/TrackerPicker.jsx';
+import { minutesToTime, timeToMinutes } from '../../utiles/week.js';
 
-const emptyForm = (date) => ({ title: '', description: '', startDate: date, endDate: date, priority: 'normal', trackerId: '', itemId: '' });
+// `times` (opcional): horario inicial, ej. al tocar un hueco libre de la agenda
+const emptyForm = (date, times) => ({
+  title: '', description: '', startDate: date, endDate: date, priority: 'normal', trackerId: '', itemId: '',
+  startTime: times ? minutesToTime(times.startMinute) : '',
+  endTime: times ? minutesToTime(times.endMinute) : ''
+});
 
 const formFromTask = (task) => ({
   title: task.title,
@@ -13,13 +19,15 @@ const formFromTask = (task) => ({
   endDate: task.endDate.slice(0, 10),
   priority: task.priority,
   trackerId: task.trackerId ? String(task.trackerId) : '',
-  itemId: task.itemId ? String(task.itemId) : ''
+  itemId: task.itemId ? String(task.itemId) : '',
+  startTime: task.startMinute !== null ? minutesToTime(task.startMinute) : '',
+  endTime: task.endMinute !== null ? minutesToTime(task.endMinute) : ''
 });
 
 // Formulario de alta/edición. El componente padre lo monta con key = tarea en
 // edición: al cambiar de tarea, React crea uno nuevo y el estado arranca limpio.
-export default function TaskForm({ date, editingTask, trackers = [], onSaved, onCancel, onError }) {
-  const [form, setForm] = useState(() => (editingTask ? formFromTask(editingTask) : emptyForm(date)));
+export default function TaskForm({ date, editingTask, initialTimes, trackers = [], onSaved, onCancel, onError }) {
+  const [form, setForm] = useState(() => (editingTask ? formFromTask(editingTask) : emptyForm(date, initialTimes)));
   const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
@@ -38,13 +46,19 @@ export default function TaskForm({ date, editingTask, trackers = [], onSaved, on
       return;
     }
 
-    // Seguimiento e ítem viajan como id (o null = ninguno)
+    // Seguimiento e ítem viajan como id, y el horario en minutos (null = ninguno)
     const toId = (value) => (value === '' ? null : Number(value));
+    const { startTime, endTime, ...rest } = form;
+    const endDate = form.endDate || form.startDate;
+    const oneDay = endDate === form.startDate;
     const payload = {
-      ...form,
-      endDate: form.endDate || form.startDate,
+      ...rest,
+      endDate,
       trackerId: toId(form.trackerId),
-      itemId: toId(form.itemId)
+      itemId: toId(form.itemId),
+      // Solo las tareas de un día tienen horario
+      startMinute: oneDay && startTime ? timeToMinutes(startTime) : null,
+      endMinute: oneDay && endTime ? timeToMinutes(endTime) : null
     };
     setSaving(true);
     onError(null);
@@ -90,6 +104,17 @@ export default function TaskForm({ date, editingTask, trackers = [], onSaved, on
           <FieldError message={fieldErrors.endDate} />
         </label>
       </div>
+      {(form.endDate === '' || form.endDate === form.startDate) && (
+        <div className="calendar-task-form-row">
+          <label>Hora desde (opcional)
+            <input type="time" className={invalid('startMinute')} value={form.startTime} onChange={(e) => updateField('startTime', e.target.value)} />
+          </label>
+          <label>Hora hasta
+            <input type="time" className={invalid('endMinute')} value={form.endTime} onChange={(e) => updateField('endTime', e.target.value)} />
+          </label>
+        </div>
+      )}
+      <FieldError message={fieldErrors.startMinute || fieldErrors.endMinute} />
       <div className="calendar-task-form-row">
         <div className="calendar-field">
           <select className={invalid('priority')} value={form.priority} onChange={(e) => updateField('priority', e.target.value)}>

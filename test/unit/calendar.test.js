@@ -99,3 +99,14 @@ describe('helpers de presentación', () => {
     assert.equal(highestPriority([{ priority: 'baja' }]), 'baja');
   });
 });
+
+describe('sortForDay con horarios', () => {
+  it('pendientes primero; dentro, por hora (las sin horario al final) y por prioridad', async () => {
+    const { sortForDay } = await import('../../src/client/utiles/tasks.js');
+    const t = (id, extra) => ({ id, done: false, priority: 'normal', startMinute: null, ...extra });
+    const sorted = sortForDay([
+      t(1, { priority: 'alta' }), t(2, { startMinute: 1020 }), t(3, { startMinute: 540 }), t(4, { done: true, startMinute: 300 })
+    ]);
+    assert.deepEqual(sorted.map(x => x.id), [3, 2, 1, 4]);
+  });
+});
