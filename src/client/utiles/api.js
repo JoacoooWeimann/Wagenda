@@ -25,6 +25,11 @@ async function request(method, url, body) {
   // Si el servidor no devolvió JSON (ej. un proxy caído), data queda en null
   const data = await res.json().catch(() => null);
 
+  // Sesión vencida o cerrada en otra pestaña: al login, volviendo después a esta página
+  if (res.status === 401) {
+    window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+  }
+
   if (!res.ok) {
     throw new ApiError(data?.error || `Error ${res.status}`, {
       status: res.status,
@@ -43,7 +48,38 @@ export const previewGoal = (goal) => request('POST', '/api/goals/preview', goal)
 export const createGoal = (goal) => request('POST', '/api/goals', goal);
 export const getGoals = () => request('GET', '/api/goals');
 export const getGoal = (id) => request('GET', `/api/goals/${id}`);
+export const updateGoal = (id, changes) => request('PATCH', `/api/goals/${id}`, changes);
+export const changeDeadline = (id, deadline, today) => request('PUT', `/api/goals/${id}/deadline`, { deadline, today });
 export const deleteGoal = (id) => request('DELETE', `/api/goals/${id}`);
-export const logSession = (goalId, date) => request('POST', `/api/goals/${goalId}/sessions`, { date });
+export const logSession = (goalId, date, value) => request('POST', `/api/goals/${goalId}/sessions`, { date, value });
 export const updateWeek = (goalId, weekId, changes) => request('PATCH', `/api/goals/${goalId}/weeks/${weekId}`, changes);
 export const addWeekTask = (goalId, weekId, title) => request('POST', `/api/goals/${goalId}/weeks/${weekId}/tasks`, { title });
+
+export const getBoards = () => request('GET', '/api/boards');
+export const createBoard = (board) => request('POST', '/api/boards', board);
+export const updateBoard = (id, changes) => request('PATCH', `/api/boards/${id}`, changes);
+export const deleteBoard = (id) => request('DELETE', `/api/boards/${id}`);
+
+export const getTrackers = () => request('GET', '/api/trackers');
+export const getTracker = (id) => request('GET', `/api/trackers/${id}`);
+export const createTracker = (tracker) => request('POST', '/api/trackers', tracker);
+export const updateTracker = (id, changes) => request('PATCH', `/api/trackers/${id}`, changes);
+export const deleteTracker = (id) => request('DELETE', `/api/trackers/${id}`);
+export const addEntry = (trackerId, entry) => request('POST', `/api/trackers/${trackerId}/entries`, entry);
+export const deleteEntry = (trackerId, entryId) => request('DELETE', `/api/trackers/${trackerId}/entries/${entryId}`);
+
+export const getGroups = () => request('GET', '/api/groups');
+export const getGroup = (id) => request('GET', `/api/groups/${id}`);
+export const createGroup = (group) => request('POST', '/api/groups', group);
+export const updateGroup = (id, changes) => request('PATCH', `/api/groups/${id}`, changes);
+export const deleteGroup = (id) => request('DELETE', `/api/groups/${id}`);
+export const joinGroup = (code) => request('POST', '/api/groups/join', { code });
+export const regenerateCode = (id) => request('POST', `/api/groups/${id}/code`);
+export const transferGroup = (id, userId) => request('POST', `/api/groups/${id}/transfer`, { userId });
+export const leaveGroup = (id) => request('DELETE', `/api/groups/${id}/members/me`);
+export const kickMember = (id, userId) => request('DELETE', `/api/groups/${id}/members/${userId}`);
+export const shareBoard = (id, boardId) => request('POST', `/api/groups/${id}/shares`, { boardId });
+export const unshareBoard = (id, shareId) => request('DELETE', `/api/groups/${id}/shares/${shareId}`);
+export const joinBoard = (id, shareId) => request('POST', `/api/groups/${id}/shares/${shareId}/join`);
+export const leaveBoard = (id, shareId) => request('DELETE', `/api/groups/${id}/shares/${shareId}/join`);
+export const getRanking = (id, shareId) => request('GET', `/api/groups/${id}/shares/${shareId}/ranking`);

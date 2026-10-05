@@ -1,6 +1,7 @@
 import express from 'express';
 import { validateMonthQuery } from '../utiles/validation/tasks.js';
 import { hasErrors } from '../utiles/validation/common.js';
+import { requireAuth } from '../middlewares/auth.js';
 const router = express.Router();
 
 router.get('/', (req, res) => {
@@ -9,7 +10,7 @@ router.get('/', (req, res) => {
 
 // Acepta ?year=&month= (lo usa "Ver en calendario" desde un objetivo);
 // si faltan o son inválidos, abre el mes actual
-router.get('/calendar', (req, res) => {
+router.get('/calendar', requireAuth, (req, res) => {
   const { data, fields } = validateMonthQuery(req.query);
   const now = new Date();
   const valid = !hasErrors(fields);
@@ -20,8 +21,17 @@ router.get('/calendar', (req, res) => {
   });
 });
 
-router.get('/goals', (req, res) => {
+router.get('/goals', requireAuth, (req, res) => {
   res.render('goals', { title: 'Objetivos' });
+});
+
+router.get('/trackers', requireAuth, (req, res) => {
+  res.render('trackers', { title: 'Seguimientos' });
+});
+
+// ?join=CÓDIGO: el link de invitación abre la página con el código cargado
+router.get('/groups', requireAuth, (req, res) => {
+  res.render('groups', { title: 'Grupos' });
 });
 
 export default router;

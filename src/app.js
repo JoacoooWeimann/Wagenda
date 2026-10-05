@@ -2,9 +2,14 @@ import express from 'express';
 import morgan from 'morgan';
 import path from 'path';
 import indexRoutes from './routes/index.js';
+import authRoutes from './routes/auth.js';
 import taskRoutes from './routes/tasks.js';
 import goalRoutes from './routes/goals.js';
+import trackerRoutes from './routes/trackers.js';
+import boardRoutes from './routes/boards.js';
+import groupRoutes from './routes/groups.js';
 import { exposeCurrentPath } from './middlewares/locals.js';
+import { loadUser, requireAuth } from './middlewares/auth.js';
 import { notFound, errorHandler } from './middlewares/errors.js';
 
 // Arma la app sin ponerla a escuchar: así los tests pueden levantarla en un
@@ -19,11 +24,19 @@ if (!['production', 'test'].includes(process.env.NODE_ENV)) app.use(morgan('dev'
 
 app.use(express.static(path.join(import.meta.dirname, 'public')));
 app.use(express.json());
+app.use(express.urlencoded({ extended: false })); // formularios de login y registro
 app.use(exposeCurrentPath);
+app.use(loadUser);
 
-app.use(indexRoutes);
+app.use(authRoutes);
+app.use(indexRoutes); // cada página decide si pide sesión
+// Toda la API trabaja sobre datos de un usuario: sin sesión, 401
+app.use('/api', requireAuth);
 app.use(taskRoutes);
 app.use(goalRoutes);
+app.use(trackerRoutes);
+app.use(boardRoutes);
+app.use(groupRoutes);
 
 // Van después de las rutas: Express recorre los middlewares en orden de registro
 app.use(notFound);

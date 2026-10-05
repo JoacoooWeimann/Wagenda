@@ -1,0 +1,7 @@
+<%# Campo de formulario con su error. Recibe: name, label, type, value, error, autocomplete, hint %>
+<div class="mb-3">
+  <label for="<%= name %>" class="form-label"><%= label %></label>
+  <input id="<%= name %>" name="<%= name %>" type="<%= type %>" value="<%= value %>"
+    class="form-control<%= error ? ' is-invalid' : '' %>" autocomplete="<%= autocomplete %>" required>
+  <% if (error) { %><div class="invalid-feedback"><%= error %></div><% } else if (locals.hint) { %><div class="form-text"><%= hint %></div><% } %>
+</div>

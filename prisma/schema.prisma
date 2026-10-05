@@ -33,11 +33,28 @@ enum TaskKind {
   hito
 }
 
+// activo: en curso (aunque haya pasado la fecha límite) · logrado / abandonado:
+// cerrado por el usuario. Cerrar es reversible y no borra nada.
+enum GoalStatus {
+  activo
+  logrado
+  abandonado
+}
+
+// username y passwordHash son opcionales solo por el invitado (id 1, del seed):
+// no tiene credenciales hasta que la primera cuenta registrada lo reclama.
 model User {
-  id    Int    @id @default(autoincrement())
-  name  String @default("Invitado")
-  tasks Task[]
-  goals Goal[]
+  id           Int     @id @default(autoincrement())
+  name         String  @default("Invitado") // nombre visible
+  username     String? @unique              // para loguearse; en minúsculas
+  passwordHash String?                      // scrypt, ver utiles/auth/password.js
+  sessions     Session[]
+  tasks    Task[]
+  goals    Goal[]
+  trackers Tracker[]
+  boards   Board[]
+  groups   GroupMember[]
+  joins    ShareJoin[]
 }
 
 model Goal {
@@ -48,6 +65,8 @@ model Goal {
   strategy    PlanStrategy
   startDate   DateTime
   deadline    DateTime
+  status      GoalStatus   @default(activo)
+  closedAt    DateTime?
   // Los parámetros de generación (contenidos, sesiones por semana, repaso) no se
   // guardan: el plan es editable, así que la fuente de verdad son sus semanas y tareas.
   createdAt   DateTime     @default(now())
@@ -55,6 +74,11 @@ model Goal {
   user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId Int
   weeks  GoalWeek[]
+
+  // Seguimiento opcional: al registrar una sesión se puede cargar también una
+  // medición. SetNull: borrar el seguimiento no borra el objetivo.
+  tracker   Tracker? @relation(fields: [trackerId], references: [id], onDelete: SetNull)
+  trackerId Int?
 
   @@index([userId])
 }
@@ -98,4 +122,155 @@ model Task {
   // Cubre la consulta del mes (userId = ? AND startDate < ? ORDER BY startDate)
   // y, por empezar con userId, también las búsquedas por la foreign key
   @@index([userId, startDate])
+}
+
+// Tablero: agrupa seguimientos relacionados (ej. "Gimnasio": press banca,
+// sentadilla; "CS2": rating, K/D). Más adelante es lo que se comparte con un
+// grupo de amigos, y cada miembro elige si se une.
+model Board {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId   Int
+  trackers Tracker[]
+  shares   BoardShare[]
+
+  // Copia de un tablero compartido al que el usuario se unió. Mientras está
+  // vinculada, su estructura la define el dueño del original. SetNull: si el
+  // original desaparece, la copia queda como tablero personal, con sus datos.
+  sourceBoard   Board?  @relation("BoardCopies", fields: [sourceBoardId], references: [id], onDelete: SetNull)
+  sourceBoardId Int?
+  copies        Board[] @relation("BoardCopies")
+
+  @@index([userId])
+  @@index([sourceBoardId])
+}
+
+// Algo que se mide en el tiempo, sin fecha límite (ej. "Press banca" en kg,
+// "Rating Premier" en pts). Un objetivo mide constancia (sesiones y cuotas);
+// un seguimiento mide rendimiento. Es lo que más adelante se comparte en grupos.
+model Tracker {
+  id             Int       @id @default(autoincrement())
+  name           String
+  unit           String?
+  higherIsBetter Boolean   @default(true) // en "5 km" (minutos), menos es mejor
+  createdAt      DateTime  @default(now())
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  Int
+  entries TrackerEntry[]
+  goals   Goal[]
+
+  // Tablero opcional (uno solo). SetNull: borrar un tablero no borra sus
+  // seguimientos ni sus registros; pasan a "Sin tablero".
+  board   Board? @relation(fields: [boardId], references: [id], onDelete: SetNull)
+  boardId Int?
+
+  // Copia vinculada a un seguimiento de un tablero compartido (ver Board.sourceBoardId)
+  sourceTracker   Tracker?  @relation("TrackerCopies", fields: [sourceTrackerId], references: [id], onDelete: SetNull)
+  sourceTrackerId Int?
+  copies          Tracker[] @relation("TrackerCopies")
+
+  @@index([userId])
+  @@index([boardId])
+  @@index([sourceTrackerId])
+}
+
+model TrackerEntry {
+  id        Int      @id @default(autoincrement())
+  date      DateTime // fecha de calendario (medianoche UTC), como las tareas
+  value     Float
+  note      String?
+  createdAt DateTime @default(now())
+
+  tracker   Tracker @relation(fields: [trackerId], references: [id], onDelete: Cascade)
+  trackerId Int
+
+  // Historial de un seguimiento ordenado por fecha
+  @@index([trackerId, date])
+}
+
+// Sesión iniciada. La cookie lleva un token aleatorio; acá se guarda solo su
+// hash (SHA-256): si se filtrara la base, los tokens no sirven para entrar.
+// Cerrar sesión es borrar la fila.
+model Session {
+  id        Int      @id @default(autoincrement())
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+
+  @@index([userId])
+}
+
+// --- Grupos -----------------------------------------------------------------
+// Un grupo de amigos. Se entra con el código de invitación. Entrar no comparte
+// nada: cada miembro elige a qué tableros compartidos unirse.
+
+enum GroupRole {
+  owner // el creador (o a quien se lo transfirió): administra el grupo
+  member
+}
+
+model Group {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  inviteCode  String   @unique
+  // Anti-spam: el grupo solo toma en cuenta los primeros N registros por
+  // semana de cada persona en cada seguimiento. null = sin límite.
+  weeklyLimit Int?
+  createdAt   DateTime @default(now())
+
+  members GroupMember[]
+  shares  BoardShare[]
+}
+
+model GroupMember {
+  id       Int       @id @default(autoincrement())
+  role     GroupRole @default(member)
+  joinedAt DateTime  @default(now())
+
+  group   Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId Int
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  Int
+
+  @@unique([groupId, userId])
+  @@index([userId])
+}
+
+// Un tablero (original, nunca una copia) compartido en un grupo
+model BoardShare {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  group   Group       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId Int
+  board   Board       @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  boardId Int
+  joins   ShareJoin[]
+
+  @@unique([groupId, boardId])
+  @@index([boardId])
+}
+
+// "Unirme": el usuario participa del tablero compartido EN ESTE grupo (si el
+// mismo tablero está en otro grupo, ahí no aparece salvo que se una también)
+model ShareJoin {
+  id       Int      @id @default(autoincrement())
+  joinedAt DateTime @default(now())
+
+  share   BoardShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  shareId Int
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  Int
+
+  @@unique([shareId, userId])
+  @@index([userId])
 }

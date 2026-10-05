@@ -79,7 +79,7 @@ describe('POST /api/goals', () => {
     const goal = await createGoal(algebra());
     const october = await monthTasks(2026, 10);
     const unit = october.find(t => t.title === 'Unidad 1');
-    assert.deepEqual(unit.goalWeek, { number: 1, goal: { id: goal.id, title: 'Álgebra', strategy: 'divisible' } });
+    assert.deepEqual(unit.goalWeek, { number: 1, goal: { id: goal.id, title: 'Álgebra', strategy: 'divisible', status: 'activo' } });
 
     const patched = await ctx.request('PATCH', `/api/tasks/${unit.id}`, { done: true });
     assert.equal(patched.body.goalWeek.goal.title, 'Álgebra');
@@ -316,6 +316,137 @@ describe('POST /api/goals/:id/weeks/:weekId/tasks', () => {
   });
 });
 
+describe('PATCH /api/goals/:id', () => {
+  it('edita título, tipo y descripción, y actualiza el hito y la categoría de las tareas', async () => {
+    const goal = await createGoal(algebra());
+    const res = await ctx.request('PATCH', `/api/goals/${goal.id}`, {
+      title: 'Álgebra II', type: 'profesional', description: 'Segundo cuatrimestre'
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.title, 'Álgebra II');
+    assert.equal(res.body.description, 'Segundo cuatrimestre');
+    assert.equal(res.body.strategy, 'divisible');
+
+    const tasks = res.body.weeks.flatMap(w => w.tasks);
+    assert.equal(tasks.find(t => t.kind === 'hito').title, 'Fecha límite: Álgebra II');
+    assert.ok(tasks.every(t => t.category === 'Profesional'));
+  });
+
+  it('ignora la estrategia y valida los campos', async () => {
+    const goal = await createGoal(algebra());
+    assert.equal((await ctx.request('PATCH', `/api/goals/${goal.id}`, { strategy: 'fases' })).status, 400);
+    const bad = await ctx.request('PATCH', `/api/goals/${goal.id}`, { title: '', type: 'x' });
+    assert.equal(bad.status, 400);
+    assert.ok(bad.body.fields.title);
+    assert.ok(bad.body.fields.type);
+    assert.equal((await ctx.request('PATCH', '/api/goals/9999', { title: 'x' })).status, 404);
+  });
+});
+
+describe('cerrar y reabrir un objetivo', () => {
+  it('guarda el estado y la fecha de cierre; al reabrir la borra', async () => {
+    const goal = await createGoal(running());
+    const done = await ctx.request('PATCH', `/api/goals/${goal.id}`, { status: 'logrado' });
+    assert.equal(done.status, 200);
+    assert.equal(done.body.status, 'logrado');
+    assert.ok(done.body.closedAt);
+
+    const reopened = await ctx.request('PATCH', `/api/goals/${goal.id}`, { status: 'activo' });
+    assert.equal(reopened.body.status, 'activo');
+    assert.equal(reopened.body.closedAt, null);
+
+    assert.equal((await ctx.request('PATCH', `/api/goals/${goal.id}`, { status: 'x' })).status, 400);
+  });
+
+  it('un objetivo cerrado es de solo lectura', async () => {
+    const goal = await createGoal(algebra());
+    const [week] = goal.weeks;
+    const [task] = week.tasks;
+    const fases = await createGoal(running());
+    await ctx.request('PATCH', `/api/goals/${goal.id}`, { status: 'abandonado' });
+    await ctx.request('PATCH', `/api/goals/${fases.id}`, { status: 'abandonado' });
+
+    const attempts = [
+      ctx.request('POST', `/api/goals/${fases.id}/sessions`, { date: '2026-10-06' }),
+      ctx.request('PATCH', `/api/goals/${goal.id}/weeks/${week.id}`, { label: 'Otra' }),
+      ctx.request('POST', `/api/goals/${goal.id}/weeks/${week.id}/tasks`, { title: 'Extra' }),
+      ctx.request('PATCH', `/api/tasks/${task.id}`, { done: true }),
+      ctx.request('DELETE', `/api/tasks/${task.id}`)
+    ];
+    for (const res of await Promise.all(attempts)) {
+      assert.equal(res.status, 400);
+      assert.equal(res.body.fields.status, 'El objetivo está cerrado');
+    }
+    // los datos básicos sí se pueden editar (ej. corregir el título)
+    assert.equal((await ctx.request('PATCH', `/api/goals/${goal.id}`, { title: 'Otro' })).status, 200);
+  });
+
+  it('el calendario oculta lo pendiente de un objetivo cerrado y muestra lo hecho', async () => {
+    const goal = await createGoal(algebra());
+    const [done, pending] = goal.weeks[0].tasks;
+    await ctx.request('PATCH', `/api/tasks/${done.id}`, { done: true });
+    const loose = await ctx.request('POST', '/api/tasks', { title: 'Suelta', startDate: '2026-10-06' });
+
+    await ctx.request('PATCH', `/api/goals/${goal.id}`, { status: 'abandonado' });
+    const ids = (await monthTasks(2026, 10)).map(t => t.id);
+    assert.ok(ids.includes(done.id));
+    assert.ok(ids.includes(loose.body.id));
+    assert.ok(!ids.includes(pending.id));
+
+    await ctx.request('PATCH', `/api/goals/${goal.id}`, { status: 'activo' });
+    assert.ok((await monthTasks(2026, 10)).some(t => t.id === pending.id));
+  });
+});
+
+describe('PUT /api/goals/:id/deadline', () => {
+  const change = (goal, deadline, today = '2026-10-01') =>
+    ctx.request('PUT', `/api/goals/${goal.id}/deadline`, { deadline, today });
+
+  it('extender un objetivo por fases agrega semanas y mueve el hito', async () => {
+    const goal = await createGoal(running());
+    const res = await change(goal, '2026-12-13');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.deadline, '2026-12-13T00:00:00.000Z');
+    assert.equal(res.body.weeks.length, 10);
+    assert.deepEqual(res.body.weeks.slice(-2).map(w => [w.label, w.target]), [['Evaluación', 3], ['Evaluación', 3]]);
+
+    const milestone = res.body.weeks.at(-1).tasks.find(t => t.kind === 'hito');
+    assert.equal(milestone.startDate, '2026-12-13T00:00:00.000Z');
+    assert.equal(res.body.weeks.flatMap(w => w.tasks).filter(t => t.kind === 'hito').length, 1);
+  });
+
+  it('acortar mueve las tareas de las semanas quitadas sin perder ninguna ni su estado', async () => {
+    const goal = await createGoal(algebra());
+    const unit6 = goal.weeks.flatMap(w => w.tasks).find(t => t.title === 'Unidad 6');
+    await ctx.request('PATCH', `/api/tasks/${unit6.id}`, { done: true });
+    const before = await ctx.prisma.task.count();
+
+    const res = await change(goal, '2026-10-25');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.weeks.length, 3);
+    assert.equal(await ctx.prisma.task.count(), before);
+
+    const last = res.body.weeks.at(-1);
+    const titles = last.tasks.map(t => t.title);
+    assert.ok(titles.includes('Unidad 6') && titles.includes('Repaso general'));
+    assert.equal(last.tasks.find(t => t.title === 'Unidad 6').done, true);
+    assert.ok(last.tasks.every(t => t.endDate <= '2026-10-25T00:00:00.000Z'));
+  });
+
+  it('valida el nuevo plazo', async () => {
+    const goal = await createGoal(running());
+    assert.match((await change(goal, '2026-10-10', '2026-10-20')).body.fields.deadline, /anterior a hoy/);
+    assert.match((await change(goal, '2026-10-01')).body.fields.deadline, /anterior al inicio/);
+    assert.match((await change(goal, '2026-11-29')).body.fields.deadline, /actual/);
+    assert.match((await change(goal, '2028-01-01')).body.fields.deadline, /52 semanas/);
+    assert.ok((await change(goal, '2026-12-13', 'hoy')).body.fields.today);
+    assert.equal((await change({ id: 9999 }, '2026-12-13')).status, 404);
+
+    await ctx.request('PATCH', `/api/goals/${goal.id}`, { status: 'logrado' });
+    assert.equal((await change(goal, '2026-12-13')).body.fields.status, 'El objetivo está cerrado');
+  });
+});
+
 describe('DELETE /api/goals/:id', () => {
   it('borra el objetivo, sus semanas y sus tareas (cascade), sin tocar tareas sueltas', async () => {
     const goal = await createGoal(algebra());
@@ -342,6 +473,7 @@ describe('propiedad de los objetivos', () => {
 
     assert.deepEqual((await ctx.request('GET', '/api/goals')).body, []);
     assert.equal((await ctx.request('GET', `/api/goals/${foreign.id}`)).status, 404);
+    assert.equal((await ctx.request('PATCH', `/api/goals/${foreign.id}`, { title: 'Mío' })).status, 404);
     assert.equal((await ctx.request('DELETE', `/api/goals/${foreign.id}`)).status, 404);
     assert.equal(await ctx.prisma.goal.count({ where: { id: foreign.id } }), 1);
   });

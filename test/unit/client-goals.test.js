@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   suggestedStrategy, typeLabel, todayKey, dayMonth, daysBetweenKeys,
   goalStatus, deadlineText, progressFromWeeks, percent, buildGoalPayload,
-  withWeekDone, weekSummary, paceOf, countNoun, calendarLink
+  withWeekDone, weekSummary, paceOf, countNoun, calendarLink, weekCount, deadlineChangeNote
 } from '../../src/client/utiles/goals.js';
 
 const iso = (k) => `${k}T00:00:00.000Z`;
@@ -41,6 +41,13 @@ describe('helpers de objetivos (cliente)', () => {
     assert.equal(goalStatus(goal, '2026-10-18').text, 'Semana 2 de 3 · Práctica');
     assert.equal(goalStatus(goal, '2026-10-25').text, 'Semana 3 de 3 · Evaluación');
     assert.equal(goalStatus(goal, '2026-10-26').kind, 'finished');
+  });
+
+  it('goalStatus: un objetivo cerrado muestra su cierre, no la semana', () => {
+    const closedAt = new Date(2026, 9, 12, 15, 30).toISOString(); // 12/10 hora local
+    assert.deepEqual(goalStatus({ ...goal, status: 'logrado', closedAt }, '2026-10-14'), { kind: 'closed', text: '✔ Logrado el 12/10' });
+    assert.equal(goalStatus({ ...goal, status: 'abandonado', closedAt }, '2026-10-14').text, 'Abandonado');
+    assert.equal(goalStatus({ ...goal, status: 'activo', closedAt: null }, '2026-10-14').kind, 'active');
   });
 
   it('deadlineText', () => {
@@ -97,16 +104,19 @@ describe('helpers de objetivos (cliente)', () => {
       title: 'X', description: '', type: 'academico', strategy: 'divisible',
       startDate: '2026-10-05', deadline: '2026-11-08',
       contents: [{ name: 'Unidad', count: '6' }, { name: 'TP', count: '' }],
-      reviewWeek: false, sessionsPerWeek: '3'
+      reviewWeek: false, sessionsPerWeek: '3', trackerId: '7'
     };
     const divisible = buildGoalPayload(form);
     assert.deepEqual(divisible.contents, [{ name: 'Unidad', count: 6 }, { name: 'TP', count: undefined }]);
     assert.equal(divisible.reviewWeek, false);
     assert.equal('sessionsPerWeek' in divisible, false);
+    assert.equal('trackerId' in divisible, false);
 
     const fases = buildGoalPayload({ ...form, strategy: 'fases' });
     assert.equal(fases.sessionsPerWeek, 3);
+    assert.equal(fases.trackerId, 7);
     assert.equal('contents' in fases, false);
+    assert.equal('trackerId' in buildGoalPayload({ ...form, strategy: 'fases', trackerId: '' }), false);
   });
 
   it('calendarLink apunta al mes más útil', () => {
@@ -114,5 +124,24 @@ describe('helpers de objetivos (cliente)', () => {
     assert.equal(calendarLink(goal, '2026-10-14'), '/calendar?year=2026&month=10'); // en curso
     assert.equal(calendarLink({ ...goal, deadline: iso('2026-11-20') }, '2026-11-02'), '/calendar?year=2026&month=11');
     assert.equal(calendarLink(goal, '2027-01-03'), '/calendar?year=2026&month=10'); // terminado
+    const closedAt = new Date(2027, 0, 3, 12).toISOString(); // cerrado después del plazo
+    assert.equal(calendarLink({ ...goal, status: 'logrado', closedAt }, '2027-01-03'), '/calendar?year=2026&month=10');
+  });
+});
+
+describe('cambio de plazo', () => {
+  it('weekCount cuenta semanas de lunes a domingo, como buildWeeks', () => {
+    assert.equal(weekCount('2026-10-05', '2026-11-08'), 5); // lunes a domingo
+    assert.equal(weekCount('2026-10-07', '2026-10-12'), 2); // miércoles a lunes
+    assert.equal(weekCount('2026-10-05', '2026-10-05'), 1);
+  });
+
+  it('deadlineChangeNote anticipa qué pasa con el plan', () => {
+    const weeks = [1, 2, 3, 4, 5].map(n => ({ number: n, label: n === 5 ? 'Repaso' : 'Unidad' }));
+    const goal = { startDate: iso('2026-10-05'), strategy: 'divisible', weeks };
+    assert.equal(deadlineChangeNote(goal, '2026-11-15'), 'Se agrega 1 semana libre, para completar con «Editar plan».');
+    assert.equal(deadlineChangeNote(goal, '2026-10-25'), 'Se quitan 2 semanas; sus tareas pasan a la semana 3.');
+    assert.equal(deadlineChangeNote(goal, '2026-11-06'), 'Cambia el fin de la última semana.');
+    assert.equal(deadlineChangeNote({ ...goal, strategy: 'fases' }, '2026-11-22'), 'Se agregan 2 semanas de «Repaso».');
   });
 });

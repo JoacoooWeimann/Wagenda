@@ -33,12 +33,22 @@ export function daysBetweenKeys(fromKey, toKey) {
   return Math.round((utc(toKey) - utc(fromKey)) / 86400000);
 }
 
+// Día (local) en que se cerró el objetivo. closedAt es un instante, no una
+// fecha de calendario: se pasa a la fecha de la computadora del usuario.
+export const closedKey = (goal) => todayKey(new Date(goal.closedAt));
+
+export const isClosed = (goal) => goal.status !== undefined && goal.status !== 'activo';
+
 // En qué punto del plan está el objetivo hoy
 export function goalStatus(goal, today) {
   const start = keyOf(goal.startDate);
   const deadline = keyOf(goal.deadline);
+  if (isClosed(goal)) {
+    const text = goal.status === 'logrado' ? `✔ Logrado el ${dayMonth(closedKey(goal))}` : 'Abandonado';
+    return { kind: 'closed', text };
+  }
   if (today < start) return { kind: 'upcoming', text: `Empieza el ${dayMonth(goal.startDate)}` };
-  if (today > deadline) return { kind: 'finished', text: 'Finalizado' };
+  if (today > deadline) return { kind: 'finished', text: 'Terminó el plazo · ¿lo lograste?' };
 
   const week = goal.weeks.find(w => keyOf(w.startDate) <= today && today <= keyOf(w.endDate));
   const text = week ? `Semana ${week.number} de ${goal.weeks.length} · ${week.label}` : '';
@@ -123,16 +133,49 @@ export function buildGoalPayload(form) {
     payload.reviewWeek = form.reviewWeek;
   } else {
     payload.sessionsPerWeek = toInt(form.sessionsPerWeek);
+    if (form.trackerId) payload.trackerId = Number(form.trackerId);
   }
   return payload;
 }
 
 // Link al calendario en el mes más útil: el actual si el objetivo está en curso,
-// el de inicio si todavía no empezó, el de la fecha límite si ya terminó
+// el de inicio si todavía no empezó, el de la fecha límite si ya terminó, y el
+// del cierre (dentro del plazo) si se cerró
 export function calendarLink(goal, today) {
   const { kind } = goalStatus(goal, today);
-  const key = kind === 'upcoming' ? goal.startDate : kind === 'finished' ? goal.deadline : today;
+  let key = kind === 'upcoming' ? goal.startDate : kind === 'finished' ? goal.deadline : today;
+  if (kind === 'closed') {
+    const closed = closedKey(goal);
+    key = [keyOf(goal.startDate), closed, keyOf(goal.deadline)].sort()[1]; // el del medio: dentro del plazo
+  }
   return `/calendar?year=${Number(key.slice(0, 4))}&month=${Number(key.slice(5, 7))}`;
 }
 
 export const MAX_CONTENT_TYPES = 5;
+
+// Cuántas semanas (lunes a domingo) toca el rango [startKey, endKey]: misma
+// grilla que buildWeeks en el servidor
+export function weekCount(startKey, endKey) {
+  const weekday = new Date(`${startKey}T00:00:00Z`).getUTCDay();
+  const offset = (weekday + 6) % 7; // lunes=0 ... domingo=6
+  return Math.ceil((offset + daysBetweenKeys(startKey, endKey) + 1) / 7);
+}
+
+// Explica qué va a pasar con el plan al cambiar el plazo (misma regla que
+// resizePlan en el servidor, que es quien lo aplica)
+export function deadlineChangeNote(goal, newKey) {
+  const current = goal.weeks.length;
+  const next = weekCount(keyOf(goal.startDate), newKey);
+  if (next > current) {
+    const n = next - current;
+    const added = n === 1 ? 'Se agrega 1 semana' : `Se agregan ${n} semanas`;
+    return goal.strategy === 'fases'
+      ? `${added} de «${goal.weeks.at(-1).label}».`
+      : `${added} ${n === 1 ? 'libre' : 'libres'}, para completar con «Editar plan».`;
+  }
+  if (next < current) {
+    const n = current - next;
+    return `${n === 1 ? 'Se quita 1 semana' : `Se quitan ${n} semanas`}; sus tareas pasan a la semana ${next}.`;
+  }
+  return 'Cambia el fin de la última semana.';
+}

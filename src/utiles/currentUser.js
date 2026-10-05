@@ -1,9 +1,14 @@
-// Único punto que decide de quién son los datos del pedido. Hoy siempre es el
-// usuario invitado (id 1, lo crea el seed); con login, esto va a leer la sesión
-// y ningún controller va a tener que cambiar.
-const GUEST_USER_ID = 1;
+// Único punto que decide de quién son los datos del pedido: el usuario de la
+// sesión, que deja en req.user el middleware loadUser. Los controllers no
+// cambiaron al agregar el login: siempre preguntaron acá.
 
-// `req` todavía no se usa: es donde va a estar la sesión cuando haya login
+// El invitado del seed (sin credenciales): la primera cuenta registrada se
+// queda con él y con sus datos (ver controllers/auth.js)
+export const GUEST_USER_ID = 1;
+
 export function currentUserId(req) {
-  return GUEST_USER_ID;
+  // Las rutas que usan datos del usuario están detrás de requireAuth; si se
+  // llega acá sin sesión es un error de programación, no del usuario.
+  if (!req.user) throw new Error('currentUserId sin sesión: falta requireAuth en la ruta');
+  return req.user.id;
 }

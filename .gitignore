@@ -6,3 +6,5 @@ prisma/dev.db
 src/public/build/
 # Bases temporales de los tests
 prisma/test-*.db*
+# Base sombra que usa `prisma migrate diff`
+shadow.db*

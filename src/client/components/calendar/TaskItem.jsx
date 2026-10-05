@@ -3,16 +3,18 @@ import { isMultiDay, shortDate } from '../../utiles/tasks.js';
 import { COLOR_PRIORIDAD } from './constants.js';
 
 // Una fila de la lista del día. Si la tarea pertenece a un plan, muestra la
-// etiqueta del objetivo con link a la página de objetivos.
+// etiqueta del objetivo con link a la página de objetivos. Las tareas de un
+// objetivo cerrado son historial: no se marcan, editan ni borran.
 export default function TaskItem({ task, onToggle, onEdit, onRemove }) {
   const [confirming, setConfirming] = useState(false);
   const goalWeek = task.goalWeek;
+  const readOnly = goalWeek && goalWeek.goal.status !== 'activo';
 
   return (
     <li className={task.done ? 'calendar-task-done' : ''}>
-      <input type="checkbox" checked={task.done} onChange={() => onToggle(task)} aria-label={`Marcar ${task.title}`} />
+      <input type="checkbox" checked={task.done} disabled={readOnly} onChange={() => onToggle(task)} aria-label={`Marcar ${task.title}`} />
       <span className="calendar-task-priority-dot" style={{ background: COLOR_PRIORIDAD[task.priority] }} />
-      <div className="calendar-task-info" onClick={() => onEdit(task)}>
+      <div className="calendar-task-info" onClick={() => !readOnly && onEdit(task)}>
         <span>
           {task.title} {task.category && <em>({task.category})</em>}
           {isMultiDay(task) && (
@@ -21,12 +23,12 @@ export default function TaskItem({ task, onToggle, onEdit, onRemove }) {
         </span>
         {goalWeek && (
           <a className="calendar-task-goal" href="/goals" onClick={(e) => e.stopPropagation()}>
-            {goalWeek.goal.title} · Sem {goalWeek.number}
+            {goalWeek.goal.title} · Sem {goalWeek.number}{readOnly && ' · cerrado'}
           </a>
         )}
         {task.description && <span className="calendar-task-description">{task.description}</span>}
       </div>
-      {confirming ? (
+      {readOnly ? null : confirming ? (
         <span className="calendar-task-confirm">
           <button type="button" className="calendar-task-confirm-delete" onClick={() => onRemove(task.id)}>Borrar</button>
           <button type="button" onClick={() => setConfirming(false)}>Cancelar</button>

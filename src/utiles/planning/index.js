@@ -1,14 +1,19 @@
 // Generador de planes: función pura. Recibe un objetivo ya validado y devuelve
 // el plan en memoria (semanas con sus tareas). No toca la base: el controller
 // decide si solo mostrarlo (preview) o guardarlo.
-import { buildWeeks } from './weeks.js';
+import { buildWeeks, MAX_WEEKS } from './weeks.js';
 import { planDivisible, planFases, PlanError } from './strategies.js';
 import { TYPE_LABELS } from './templates.js';
 
 export { PlanError } from './strategies.js';
-export const MAX_WEEKS = 52;
+export { MAX_WEEKS } from './weeks.js';
+export { resizePlan, FREE_WEEK_LABEL } from './resize.js';
 
 const TITLE_MAX = 100; // mismo límite que el título de una Task
+
+// Título del hito de fecha límite. Exportado: al renombrar el objetivo, el
+// controller lo recalcula con la misma regla.
+export const milestoneTitle = (goalTitle) => `Fecha límite: ${goalTitle}`.slice(0, TITLE_MAX);
 
 export function generatePlan(goal) {
   const weeks = buildWeeks(goal.startDate, goal.deadline);
@@ -25,7 +30,7 @@ export function generatePlan(goal) {
   planned.at(-1).tasks.push({
     startDate: goal.deadline,
     endDate: goal.deadline,
-    title: `Fecha límite: ${goal.title}`.slice(0, TITLE_MAX),
+    title: milestoneTitle(goal.title),
     priority: 'alta',
     kind: 'hito'
   });
