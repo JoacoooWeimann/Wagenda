@@ -15,7 +15,7 @@ ramas `develop` → `main` y decisiones técnicas documentadas.
 | **Node.js + Express 5** | Servidor HTTP y API REST | Express 5 manda automáticamente los errores de los handlers `async` al manejador de errores, sin `try/catch` en cada ruta |
 | **EJS** | Vistas renderizadas en el servidor | Las páginas simples (portada, errores, login y registro) no necesitan JavaScript en el cliente |
 | **Bootstrap 5.3 + Bootstrap Icons** (CDN) | Base de estilos y los íconos de la navegación | En modo oscuro (`data-bs-theme="dark"`), con sus variables apuntadas a nuestra paleta. Solo el CSS: no se usa su JavaScript |
-| **React** (como "islas") | Inicio, calendario, objetivos, seguimientos y grupos | La interactividad está concentrada en dos widgets: React se monta en un `<div>` de cada vista EJS en vez de convertir todo en una SPA |
+| **React** (como "islas") | Inicio, calendario, objetivos, seguimientos y grupos | La interactividad está concentrada en widgets: React se monta en un `<div>` de cada vista EJS en vez de convertir todo en una SPA |
 | **Vite** | Compila el código de React | Un punto de entrada por isla (`app.js`, `goals.js`); React va en un chunk común que el navegador descarga una sola vez |
 | **Prisma 6 + SQLite** | Modelo de datos, migraciones y consultas | SQLite no necesita un servidor aparte. Prisma está fijado en la versión 6 porque la 7 cambia el flujo clásico de generación del cliente |
 | **node:test** | Tests unitarios y de integración | Viene incluido en Node: no suma dependencias |
@@ -71,7 +71,7 @@ prisma/
 src/
   index.js               Punto de entrada: solo app.listen()
   app.js                 Arma la app de Express (middlewares, rutas, errores)
-  routes/                Definición de endpoints (auth, tasks, goals, trackers, boards, groups, páginas)
+  routes/                Definición de endpoints (auth, tasks, goals, trackers + items, groups, páginas)
   controllers/           Orquestan: validar → consultar/guardar → responder
   middlewares/           Sesión (loadUser, requireAuth), errores y datos comunes a las vistas
   utiles/                Utilidades del backend (sin dependencia de Express)
@@ -83,7 +83,7 @@ src/
     queries.js / responses.js
     validation/            Validación de entrada (funciones puras)
     planning/              Algoritmo de planificación y cambio de plazo (funciones puras)
-    trackers.js            Resumen de un seguimiento (función pura)
+    trackers.js            Resumen de valores y actividad (funciones puras)
   views/                 Plantillas EJS
   public/                Archivos estáticos (CSS, imágenes, build de Vite)
     css/main.css           Design tokens (la paleta) y estilos base
@@ -93,7 +93,7 @@ src/
     components/home/       DayCard (la card del día del inicio)
     components/calendar/   Calendar, DayModal, DayPanel, TaskItem, TaskForm, SessionLogger
     components/goals/      GoalsPage, GoalForm, GoalCard, PlanWeeks, GoalInfoForm, DeadlineForm
-    components/trackers/   TrackersPage, BoardSection, TrackerCard, TrackerForm, Sparkline
+    components/trackers/   TrackersPage, TrackerSection, ItemCard, formularios, gráficos (Sparkline, ActivityBars)
     components/groups/     GroupsPage, GroupDetail, GroupForm, Ranking
     utiles/                Lógica pura del cliente y acceso a la API
 test/
@@ -113,24 +113,24 @@ no saben nada de HTTP ni de la base.
 User ─┬─< Session                    (sesiones iniciadas)
       ├─< Task                       (tareas sueltas)
       ├─< Goal ─< GoalWeek ─< Task   (tareas de un plan)
-      ├─< Board ─○< Tracker          (tableros; un seguimiento está en uno o en ninguno)
-      ├─< Tracker ─< TrackerEntry    (seguimientos y sus registros)
-      │   Goal >─○ Tracker           (vínculo opcional, solo objetivos por fases)
+      ├─< Tracker ─< TrackerItem ─< TrackerEntry   (seguimientos, sus ítems y los registros)
+      │   Task >─○ Tracker / TrackerItem          (tarea que suma actividad)
+      │   Goal >─○ TrackerItem                    (objetivo por fases vinculado a un ítem)
       └─< GroupMember >─ Group       (grupos de amigos)
-          Group ─< BoardShare >─ Board          (tablero compartido en un grupo)
-          BoardShare ─< ShareJoin >─ User       ("Unirme")
-          Board/Tracker ─○ source               (copias vinculadas al original)
+          Group ─< TrackerShare >─ Tracker      (seguimiento compartido en un grupo)
+          TrackerShare ─< ShareJoin >─ User     ("Unirme")
+          Tracker/TrackerItem ─○ source         (copias vinculadas al original)
 ```
 
 | Modelo | Campos clave |
 |---|---|
 | `User` | `name` (visible), `username` (único, para entrar), `passwordHash` |
 | `Session` | `tokenHash` (único), `expiresAt` |
-| `Task` | `title`, `startDate`/`endDate`, `priority`, `done`, `kind`, `goalWeekId?`, `trackerId?` (seguimiento al que suma), `category?` (solo tareas de objetivos) |
-| `Goal` | `title`, `type` (académico, físico, videojuego, profesional), `strategy` (divisible, fases), `startDate`, `deadline`, `status` (activo, logrado, abandonado), `closedAt?`, `trackerId?` |
+| `Task` | `title`, `startDate`/`endDate`, `priority`, `done`, `kind`, `goalWeekId?`, `trackerId?` + `itemId?` (seguimiento e ítem a los que suma), `category?` (solo tareas de objetivos) |
+| `Goal` | `title`, `type` (académico, físico, videojuego, profesional), `strategy` (divisible, fases), `startDate`, `deadline`, `status` (activo, logrado, abandonado), `closedAt?`, `itemId?` |
 | `GoalWeek` | `number`, `startDate`/`endDate`, `label` (ej. "Unidad 3 · TP 2", "Intensidad"), `target` (cuota) |
-| `Board` | `name`, `description?` |
-| `Tracker` | `name`, `kind` (medicion, actividad), `unit?`, `higherIsBetter`, `boardId?` |
+| `Tracker` | `name`, `description?`, `itemLabel?` ("Ejercicio", "Materia") |
+| `TrackerItem` | `name`, `kind` (medicion, actividad), `unit?`, `higherIsBetter`, `trackerId` |
 | `TrackerEntry` | `date`, `value`, `note?` |
 | `Group` | `name`, `description?`, `inviteCode` (único), `weeklyLimit?` |
 | `GroupMember` | `role` (owner, member) |
@@ -142,10 +142,9 @@ User ─┬─< Session                    (sesiones iniciadas)
 - `Task` referencia solo la semana; el objetivo se obtiene a través de ella, así
   no puede quedar una tarea con un objetivo y una semana que no se corresponden.
 - Todo tiene `onDelete: Cascade`: borrar un objetivo borra sus semanas y sus
-  tareas, y borrar un seguimiento borra sus registros. La excepción es
-  `Goal.trackerId` y `Tracker.boardId` (`SetNull`): borrar un seguimiento no
-  borra el objetivo, y borrar un tablero no borra sus seguimientos (pasan a
-  "Sin tablero").
+  tareas, y borrar un seguimiento borra sus ítems y registros. Las
+  excepciones son los vínculos (`SetNull`): borrar un seguimiento o un ítem no
+  borra las tareas ni los objetivos vinculados.
 
 ## Objetivos y planificación
 
@@ -245,48 +244,57 @@ vuelve todo. Los cerrados se listan aparte, en "Historial".
 
 ## Seguimientos
 
-Un **seguimiento** es algo que se mide en el tiempo **sin fecha límite**: el
-peso en press banca (kg), el rating de un juego (pts), el tiempo en 5 km (min).
-Cada registro es un valor con fecha y una nota opcional. El resumen (último
-valor, mejor marca, variación desde el inicio) **se calcula** a partir de los
-registros; la mejor marca depende de `higherIsBetter` (en 5 km, menos es mejor).
+Un **seguimiento** es un área que se sigue en el tiempo **sin fecha límite**:
+el gimnasio, la facultad, el trabajo. Adentro tiene **ítems**: los ejercicios
+del gimnasio, las materias de la facultad, los proyectos del trabajo. Cada
+seguimiento elige cómo se llaman sus ítems (`itemLabel`: "Ejercicio",
+"Materia"), y la pantalla dice "+ Agregar ejercicio".
 
-- **Objetivo y seguimiento son cosas distintas.** El objetivo mide
-  *constancia* (sesiones contra una cuota, con plazo); el seguimiento mide
-  *rendimiento*. Un objetivo por fases puede vincularse a uno: al registrar la
-  sesión se carga también la medición, en la misma transacción.
-- Borrar la sesión no borra la medición: son hechos distintos.
-- **Por qué una entidad nueva** y no un objetivo sin fecha límite: el algoritmo,
-  el progreso y el ritmo dependen del plazo; hacerlo opcional llenaría todo de
-  casos especiales. Además, los seguimientos son la base para compartir
-  progreso en grupos (ver Roadmap): así hay **un único lugar para las
-  mediciones**, y lo compartido nunca tiene fecha límite.
-- **Tableros:** agrupan seguimientos relacionados ("Gimnasio": press banca,
-  sentadilla; "CS2": rating, K/D). Un seguimiento está en un solo tablero o en
-  ninguno (1-N): así, al compartir un tablero queda claro qué se ve y qué no.
-  Borrar un tablero es una acción de organización y no destruye historial.
-  Reemplazan a la "categoría" que tenía el seguimiento: dos formas de agrupar
-  confundían, y "Gimnasio" dice más que "Físico".
-- **Dos tipos:** de **medición** (se cargan valores: kg, puntos, minutos) o de
-  **actividad** (cuenta tareas hechas, ej. "Facultad"; no pide unidad ni valores).
-- **Las tareas se clasifican eligiendo un seguimiento** (de cualquier tipo), en
-  vez de escribir una categoría. Cada tarea hecha suma **actividad** a ese
-  seguimiento: la página muestra cuántas esta semana, el total y un gráfico de
-  barras de las últimas 8 semanas. Así se ve cuánto se trabaja en cada área.
+- **Dos tipos de ítem:** de **medición** (se cargan valores con fecha: press
+  banca en kg, la nota de un parcial) o de **actividad** (cuenta tareas hechas:
+  "Lógica", "Cardio"). Un seguimiento puede mezclarlos.
+- **Las tareas se clasifican eligiendo un seguimiento y, si se quiere, uno de
+  sus ítems** ("Facultad › Lógica", o solo "Facultad" para "Inscribirme a
+  finales"). Si viene el ítem, el seguimiento es el suyo: el servidor lo
+  completa y rechaza combinaciones inconsistentes.
+- **Actividad:** cada tarea hecha suma a su seguimiento y a su ítem. El
+  seguimiento suma **todas** sus tareas (con o sin ítem), así se ve cuánto se
+  trabaja en el área; cada ítem, solo las suyas. La página muestra esta
+  semana, el total y un gráfico de barras de las últimas 8 semanas.
   - **Qué fecha cuenta:** la de la tarea (su fin: el día en que tenía que estar
     hecha), no el momento en que se marcó. Es simple y no agrega un campo.
   - El servidor devuelve la actividad como `[{ date, count }]` (tareas hechas
     por día, con `groupBy`); las semanas las arma el cliente, que es quien sabe
     qué día es hoy.
-  - Las sesiones de un objetivo vinculado a un seguimiento suman actividad a ese seguimiento.
-  - **Migración:** las categorías escritas a mano que existían se convirtieron
-    en seguimientos de actividad (uno por nombre, sin importar mayúsculas, o el
-    seguimiento propio que ya se llamara igual) y sus tareas quedaron vinculadas.
-    `Task.category` queda solo para las tareas generadas por un objetivo (su tipo).
+- **Resumen de un ítem de medición** (último valor, mejor marca, variación):
+  se calcula a partir de los registros; la mejor marca depende de
+  `higherIsBetter` (en 5 km, menos es mejor).
+- **Objetivo y seguimiento son cosas distintas.** El objetivo mide
+  *constancia* (sesiones contra una cuota, con plazo); el seguimiento mide
+  *rendimiento*. Un objetivo por fases puede vincularse a un ítem: cada sesión
+  suma actividad ahí y, si el ítem es de medición, puede cargar el valor en la
+  misma transacción. Borrar la sesión no borra el registro: son hechos distintos.
+- **Por qué una entidad aparte** y no un objetivo sin fecha límite: el
+  algoritmo, el progreso y el ritmo dependen del plazo. Además, los
+  seguimientos son lo que se comparte con amigos (ver Grupos): así hay **un
+  único lugar para las mediciones**, y lo compartido nunca tiene fecha límite.
+- **Por qué áreas con ítems** (y no un seguimiento por ejercicio): uno quiere
+  seguir "el gimnasio" y anotar adentro sus ejercicios; con seguimientos
+  sueltos, cada ejercicio quedaba desconectado del resto y no había una
+  actividad del área. Antes existía un "tablero" que agrupaba seguimientos;
+  pasó a ser el seguimiento, y los seguimientos de adentro, sus ítems.
+- **Migración de datos** (hecha a mano: Prisma ve los renombres como borrar y
+  crear tablas, y perdería todo): `Board` → `Tracker`, `Tracker` →
+  `TrackerItem`, `BoardShare` → `TrackerShare`, conservando los ids. Los
+  seguimientos sueltos de actividad pasaron a ser seguimientos; los de medición
+  sueltos, ítems de un seguimiento "General" por usuario. Para los ids nuevos se
+  usan desplazamientos fijos, así el mapeo es aritmético. Se verificó sobre una
+  copia de la base (mismas tareas y registros, `foreign_key_check` vacío) y que
+  el resultado coincide con el schema (`migrate diff` vacío).
 - Limitación: los valores son numéricos. Los rangos con nombre (ej. "Gold
   Nova") necesitarían una escala ordinal.
-- El gráfico de evolución es un SVG hecho a mano (una `polyline`), sin
-  librería. El eje X es el tiempo real, no el número de registro.
+- Los gráficos (línea de valores y barras de actividad) son SVG hechos a mano,
+  sin librería.
 
 ## Grupos
 
@@ -295,44 +303,43 @@ tiene que servir igual a quien la usa solo.
 
 - **Entrar a un grupo no comparte nada.** Se entra con un código de invitación
   (o su link, `/groups?join=CÓDIGO`). Cada miembro comparte, si quiere, alguno
-  de sus tableros, y cada uno elige a qué tableros **unirse**.
-- **Al unirse, recibe una copia** del tablero y sus seguimientos en su cuenta
-  (`Board.sourceBoardId`, `Tracker.sourceTrackerId`), y carga ahí sus valores.
-  El grupo ve un **ranking por seguimiento** (el dueño con el original, los
-  demás con su copia), ordenable por mejor marca, último valor, mejora o
-  **actividad** (tareas hechas: solo la cantidad, nunca títulos ni fechas, y
-  con el mismo límite semanal).
-- **Solo valores y fechas:** las notas de los registros son privadas. Nunca se
-  comparten objetivos, fechas límite, tareas ni otros seguimientos.
-- **Participar es por grupo:** unirse a un tablero en un grupo no te muestra en
-  otro grupo donde también esté compartido.
-- **Límite semanal (anti-spam):** el grupo puede fijar "N registros por
-  semana". Cada uno carga lo que quiera en su cuenta, pero el ranking solo toma
-  los primeros N de cada semana: nadie infla su marca cargando 50 veces, y el
-  grupo no le pone reglas a los datos personales.
+  de sus seguimientos, y cada uno elige a cuáles **unirse**.
+- **Al unirse, recibe una copia** del seguimiento con sus ítems
+  (`Tracker.sourceTrackerId`, `TrackerItem.sourceItemId`) y carga ahí sus
+  valores y tareas. El grupo ve un **ranking**: la actividad de cada uno en el
+  seguimiento (tareas hechas en el gimnasio) y, por cada ítem, mejor marca,
+  último valor, mejora o actividad.
+- **Solo números:** de las tareas, solo la cantidad (nunca títulos ni fechas);
+  de los registros, nunca la nota. Nunca se comparten objetivos ni fechas límite.
+- **Participar es por grupo:** unirse en un grupo no te muestra en otro grupo
+  donde también esté compartido.
+- **Límite semanal (anti-spam):** el grupo puede fijar "N por semana". Cada uno
+  carga lo que quiera en su cuenta, pero el ranking solo toma los primeros N de
+  cada semana (registros y tareas): nadie infla su marca, y el grupo no le pone
+  reglas a los datos personales.
 - **Roles:** quien crea el grupo lo administra: lo edita, regenera el código
   (invalida el link anterior), expulsa miembros, transfiere la administración y
-  puede quitar un tablero compartido (moderación). **No edita tableros ajenos:**
-  qué se mide y en qué unidad lo define solo el dueño de cada tablero, porque
-  son datos de su cuenta.
+  puede quitar un seguimiento compartido (moderación). **No edita seguimientos
+  ajenos:** qué se mide y en qué unidad lo define solo su dueño.
 
 ### Por qué copias vinculadas
 La alternativa era un único seguimiento con registros de varias personas. Con
-copias, **cada uno es dueño de sus datos**: si el dueño borra el tablero, lo deja
-de compartir, o alguien sale o es expulsado, nadie pierde mediciones. La copia
-se **desvincula** y queda como tablero personal con todo su historial. Además,
-cada uno puede vincular su objetivo por fases a su copia.
+copias, **cada uno es dueño de sus datos**: si el dueño lo borra o lo deja de
+compartir, o alguien sale o es expulsado, nadie pierde mediciones. La copia se
+**desvincula** y queda como seguimiento personal con todo su historial. Además,
+cada uno puede vincular su objetivo por fases a un ítem de su copia.
 
 El costo es mantener la estructura sincronizada, y está concentrado en un solo
 módulo (`utiles/groups/sharing.js`), que los controllers llaman dentro de la
 misma transacción que el cambio:
-- El dueño agrega, renombra o cambia la unidad de un seguimiento, o renombra el
-  tablero: se replica en las copias.
-- El dueño quita o borra un seguimiento: sus copias se desvinculan.
-- Una copia está vinculada **mientras su usuario participe del tablero en al
-  menos un grupo** (si se unió en dos grupos, hay una sola copia).
+- El dueño agrega, renombra o cambia la unidad de un ítem, o edita el
+  seguimiento: se replica en las copias.
+- El dueño borra un ítem o lo pasa a otro seguimiento: las copias de ese ítem
+  quedan como ítems personales de quien las tenía.
+- Una copia está vinculada **mientras su usuario participe en al menos un
+  grupo** (si se unió en dos, hay una sola copia).
 - Mientras está vinculada, la copia es de solo lectura en su estructura: se
-  cargan registros, pero no se renombra ni se borra.
+  cargan registros y tareas, pero no se renombra ni se agregan ítems.
 
 ## API
 
@@ -369,7 +376,7 @@ Sin sesión responden `401`; el cliente redirige al login.
 | `startDate` | Obligatorio, `"YYYY-MM-DD"` |
 | `endDate` | `"YYYY-MM-DD"`, mayor o igual que `startDate`. Si no viene, es igual a `startDate` |
 | `priority` | `baja`, `normal` o `alta` (por defecto `normal`) |
-| `trackerId` | Opcional: id de un seguimiento propio, o `null`. Reemplaza a la categoría escrita (`category` ya no se acepta) |
+| `trackerId`, `itemId` | Opcionales: seguimiento propio y uno de sus ítems, o `null`. Con `itemId`, el seguimiento sale del ítem. Reemplazan a la categoría escrita (`category` ya no se acepta) |
 | `done` | `true` o `false` (booleano estricto) |
 
 ### Objetivos
@@ -380,10 +387,10 @@ Sin sesión responden `401`; el cliente redirige al login.
 | `POST` | `/api/goals` | Genera y guarda objetivo, semanas y tareas | `201` + objetivo |
 | `GET` | `/api/goals` | Objetivos con progreso y resumen de semanas (sin tareas) | `200` + lista |
 | `GET` | `/api/goals/:id` | Objetivo con semanas, tareas y progreso | `200` + objetivo |
-| `PATCH` | `/api/goals/:id` | `{ title?, description?, type?, status?, trackerId? }`: edita datos básicos, cierra o reabre, vincula un seguimiento | `200` + objetivo |
+| `PATCH` | `/api/goals/:id` | `{ title?, description?, type?, status?, itemId? }`: edita datos básicos, cierra o reabre, vincula un ítem | `200` + objetivo |
 | `PUT` | `/api/goals/:id/deadline` | `{ deadline, today }`: cambia el plazo (ver 7) | `200` + objetivo |
 | `DELETE` | `/api/goals/:id` | Borra el objetivo, sus semanas y sus tareas | `200` + `{ ok: true }` |
-| `POST` | `/api/goals/:id/sessions` | `{ date, value?, note? }`: registra una sesión (solo por fases); con `value`, también un registro del seguimiento vinculado | `201` + tarea |
+| `POST` | `/api/goals/:id/sessions` | `{ date, value?, note? }`: registra una sesión (solo por fases); suma actividad al ítem vinculado; con `value` (ítem de medición), también un registro | `201` + tarea |
 | `PATCH` | `/api/goals/:id/weeks/:weekId` | `{ label?, target?, applyToPhase? }` (`target` solo por fases, 0–14) | `200` + objetivo |
 | `POST` | `/api/goals/:id/weeks/:weekId/tasks` | `{ title }`: agrega un contenido (solo por contenido) | `201` + tarea |
 
@@ -396,37 +403,40 @@ Sin sesión responden `401`; el cliente redirige al login.
 | `contents` | Solo `divisible`: `[{ name, count }]`, 1–5 tipos, 1–100 de cada uno, sin nombres repetidos |
 | `reviewWeek` | Solo `divisible`, booleano (por defecto `true`) |
 | `sessionsPerWeek` | Solo `fases`, entero 1–7 |
-| `trackerId` | Solo `fases`, opcional: id de un seguimiento propio |
+| `itemId` | Solo `fases`, opcional: id de un ítem propio |
 
 Sobre un objetivo cerrado, todo lo que modifica el plan responde `400` con
 `fields.status`.
 
-### Seguimientos
+### Seguimientos e ítems
 
 | Método | Ruta | Descripción | Respuesta OK |
 |---|---|---|---|
-| `GET` | `/api/trackers` | Seguimientos con registros, resumen y actividad | `200` + lista |
-| `GET` | `/api/trackers/options` | Lista liviana (id, nombre, tipo, unidad, tablero) para elegir en formularios | `200` + lista |
-| `POST` | `/api/trackers` | `{ name, kind?, unit?, higherIsBetter?, boardId? }` | `201` + seguimiento |
-| `GET` | `/api/trackers/:id` | Seguimiento con registros y resumen | `200` + seguimiento |
-| `PATCH` | `/api/trackers/:id` | Actualiza solo los campos enviados | `200` + seguimiento |
-| `DELETE` | `/api/trackers/:id` | Borra el seguimiento y sus registros | `200` + `{ ok: true }` |
-| `POST` | `/api/trackers/:id/entries` | `{ date, value, note? }` | `201` + registro |
-| `DELETE` | `/api/trackers/:id/entries/:entryId` | Borra un registro | `200` + `{ ok: true }` |
-| `GET` | `/api/boards` | Tableros (sin seguimientos: la página los agrupa por `boardId`) | `200` + lista |
-| `POST` | `/api/boards` | `{ name, description? }` | `201` + tablero |
-| `PATCH` | `/api/boards/:id` | Actualiza solo los campos enviados | `200` + tablero |
-| `DELETE` | `/api/boards/:id` | Borra el tablero; sus seguimientos quedan sin tablero | `200` + `{ ok: true }` |
+| `GET` | `/api/trackers` | Seguimientos con sus ítems, registros, resúmenes y actividad | `200` + lista |
+| `GET` | `/api/trackers/options` | Lista liviana (seguimientos con sus ítems) para elegir en formularios | `200` + lista |
+| `POST` | `/api/trackers` | `{ name, description?, itemLabel? }` | `201` + seguimiento |
+| `GET` | `/api/trackers/:id` | Un seguimiento completo | `200` + seguimiento |
+| `PATCH` | `/api/trackers/:id` | Actualiza solo los campos enviados (no en copias) | `200` + seguimiento |
+| `DELETE` | `/api/trackers/:id` | Borra el seguimiento con sus ítems y registros (las tareas quedan) | `200` + `{ ok: true }` |
+| `POST` | `/api/trackers/:id/items` | `{ name, kind?, unit?, higherIsBetter? }`: agrega un ítem | `201` + seguimiento |
+| `PATCH` | `/api/items/:id` | Edita o pasa a otro seguimiento (`trackerId`) | `200` + seguimiento |
+| `DELETE` | `/api/items/:id` | Borra el ítem y sus registros (sus tareas quedan en el seguimiento) | `200` + seguimiento |
+| `POST` | `/api/items/:id/entries` | `{ date, value, note? }` (también en copias) | `201` + registro |
+| `DELETE` | `/api/items/:id/entries/:entryId` | Borra un registro | `200` + `{ ok: true }` |
 
 | Campo | Regla |
 |---|---|
 | `name` | Obligatorio, 1–40 caracteres |
+| `description` | Opcional, máximo 200 |
+| `itemLabel` | Opcional, máximo 20 ("Ejercicio", "Materia") |
+| `kind` | `medicion` (por defecto) o `actividad` |
 | `unit` | Opcional, máximo 10 caracteres |
 | `higherIsBetter` | Booleano (por defecto `true`) |
-| `boardId` | Opcional: id de un tablero propio, o `null` (sin tablero) |
-| `name` (tablero) | Obligatorio, 1–40 caracteres; `description` opcional, máximo 200 |
 | `value` | Número finito (`|value| ≤ 10⁹`) |
 | `note` | Opcional, máximo 200 caracteres |
+
+Las ediciones de estructura devuelven el seguimiento completo: la página lo
+redibuja entero. Sobre una copia vinculada responden `400`.
 
 ### Grupos
 
@@ -435,17 +445,17 @@ Sobre un objetivo cerrado, todo lo que modifica el plan responde `400` con
 | `GET` | `/api/groups` | Grupos del usuario (con rol y cantidad de miembros) | `200` + lista |
 | `POST` | `/api/groups` | `{ name, description?, weeklyLimit? }`: quien lo crea lo administra | `201` + grupo |
 | `POST` | `/api/groups/join` | `{ code }`: entrar con el código de invitación | `201` (o `200` si ya era miembro) + grupo |
-| `GET` | `/api/groups/:id` | Miembros y tableros compartidos | `200` + grupo |
+| `GET` | `/api/groups/:id` | Miembros y seguimientos compartidos | `200` + grupo |
 | `PATCH` | `/api/groups/:id` | Solo administrador | `200` + grupo |
 | `DELETE` | `/api/groups/:id` | Solo administrador; las copias quedan como personales | `200` + `{ ok: true }` |
 | `POST` | `/api/groups/:id/code` | Regenera el código (solo administrador) | `200` + grupo |
 | `POST` | `/api/groups/:id/transfer` | `{ userId }`: pasa la administración | `200` + grupo |
 | `DELETE` | `/api/groups/:id/members/me` | Salir (el administrador primero transfiere) | `200` + `{ ok: true }` |
 | `DELETE` | `/api/groups/:id/members/:userId` | Expulsar (solo administrador) | `200` + grupo |
-| `POST` | `/api/groups/:id/shares` | `{ boardId }`: compartir un tablero propio (no una copia) | `201` + grupo |
+| `POST` | `/api/groups/:id/shares` | `{ trackerId }`: compartir un seguimiento propio (no una copia) | `201` + grupo |
 | `DELETE` | `/api/groups/:id/shares/:shareId` | Dejar de compartir (el dueño) o quitarlo (el administrador) | `200` + grupo |
 | `POST`/`DELETE` | `/api/groups/:id/shares/:shareId/join` | Unirse / dejar de participar | `201`/`200` + grupo |
-| `GET` | `/api/groups/:id/shares/:shareId/ranking` | Resumen de cada participante por seguimiento (sin notas, con el límite semanal) | `200` + ranking |
+| `GET` | `/api/groups/:id/shares/:shareId/ranking` | Actividad de cada participante en el seguimiento y resumen por ítem (solo números, con el límite semanal) | `200` + ranking |
 
 | Campo | Regla |
 |---|---|
@@ -576,8 +586,8 @@ tocar la base. Eso permite:
 - **Parámetros de generación (contenidos, sesiones por semana, repaso): no se
   guardan.** Con el plan editable, "6 unidades" dejaría de ser cierto apenas se
   agrega una; la fuente de verdad son las semanas y las tareas.
-- **Resumen de un seguimiento: calculado.** Último, mejor marca y variación
-  salen de los registros.
+- **Resúmenes y actividad: calculados.** Último valor, mejor marca, variación
+  y tareas hechas por semana salen de los registros y las tareas.
 - **`Task.kind` explícito** en vez de reconocer el hito por su título: si el
   texto cambia, un cálculo basado en el título se rompe en silencio.
 
@@ -607,7 +617,7 @@ Los tests de integración usan una base SQLite propia por proceso
 (`prisma/test-<pid>.db`), creada con las mismas migraciones y borrada al
 terminar: nunca tocan `dev.db`. La app escucha en el puerto 0 (el sistema
 operativo asigna uno libre), así los tests pueden correr con el servidor de
-desarrollo levantado. Hay 270 tests; la lógica de planificación está cubierta
+desarrollo levantado. Hay 263 tests; la lógica de planificación está cubierta
 al 100%.
 
 ## Roadmap
@@ -619,7 +629,7 @@ al 100%.
 - [x] **v1.3** — Pulido de objetivos (editar datos, cambiar el plazo, cerrar o abandonar) y seguimientos personales, agrupados en tableros y vinculables a objetivos
 - [x] **v1.4** — Login y múltiples usuarios: registro, sesiones propias con scrypt, la primera cuenta reclama los datos del invitado
 - [x] **v1.5** — Grupos de amigos: tableros compartidos a los que cada miembro elige unirse (copias vinculadas), ranking por seguimiento, límite semanal anti-spam y administración del grupo
-- [x] **v2.0** — Rediseño: tema oscuro con design tokens, navegación lateral/inferior y el inicio con la card del día
+- [x] **v2.0** — Rediseño: tema oscuro con design tokens, navegación lateral/inferior y el inicio con la card del día; tareas como mini-cards; seguimientos como áreas con ítems y actividad de las tareas
 - [ ] Rediseño de las demás páginas (calendario, objetivos, seguimientos, grupos)
 - [ ] Límite de intentos de login (fuerza bruta)
 - [ ] Rangos con nombre en los seguimientos (escala ordinal, ej. rangos de CS2)
