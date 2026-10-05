@@ -14,7 +14,9 @@
     "db:reset": "prisma migrate reset",
     "setup": "prisma generate && prisma migrate deploy && prisma db seed && vite build",
     "test": "node --test \"test/**/*.test.js\"",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"src/**\" \"test/**/*.test.js\""
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"src/**\" \"test/**/*.test.js\"",
+    "build:prod": "prisma generate && vite build",
+    "start:prod": "prisma migrate deploy && node src/index.js"
   },
   "nodemonConfig": {
     "ignore": [
@@ -27,17 +29,17 @@
   "license": "ISC",
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "dotenv": "^16.6.1",
     "ejs": "^6.0.1",
     "express": "^5.2.1",
     "morgan": "^1.11.0",
+    "prisma": "^6.19.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.0",
-    "dotenv": "^16.6.1",
     "nodemon": "^3.1.14",
-    "prisma": "^6.19.3",
     "vite": "^8.2.2"
   },
   "engines": {

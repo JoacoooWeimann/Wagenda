@@ -1,6 +1,8 @@
 import express from 'express';
 import morgan from 'morgan';
 import path from 'path';
+import { config } from './config.js';
+import healthRoutes from './routes/health.js';
 import indexRoutes from './routes/index.js';
 import authRoutes from './routes/auth.js';
 import taskRoutes from './routes/tasks.js';
@@ -16,12 +18,15 @@ import { notFound, errorHandler } from './middlewares/errors.js';
 // puerto libre (listen(0)) y con su propia base de datos.
 const app = express();
 
+// Detrás de un proxy (Railway): ver config.trustProxy
+app.set('trust proxy', config.trustProxy);
 app.set('view engine', 'ejs');
 app.set('views', path.join(import.meta.dirname, 'views'));
 
 // Una línea por pedido (método, URL, status, tiempo); en producción y tests no hace falta
 if (!['production', 'test'].includes(process.env.NODE_ENV)) app.use(morgan('dev'));
 
+app.use(healthRoutes); // antes que todo lo demás: no necesita sesión ni body
 app.use(express.static(path.join(import.meta.dirname, 'public')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false })); // formularios de login y registro

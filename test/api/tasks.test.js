@@ -197,3 +197,11 @@ describe('tareas con horario', () => {
     assert.deepEqual([res.body.startMinute, res.body.endMinute], [null, null]);
   });
 });
+
+describe('producción', () => {
+  it('/health responde sin sesión y comprueba la base', async () => {
+    const res = await ctx.request('GET', '/health', undefined, { cookie: null });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { ok: true });
+  });
+});
