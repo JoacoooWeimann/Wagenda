@@ -5,6 +5,7 @@ import { validateRegister, validateLogin, safeNext } from '../utiles/validation/
 import { hashPassword, verifyPassword, dummyVerify } from '../utiles/auth/password.js';
 import { createSession, deleteSession, readCookie, sessionCookieOptions, SESSION_COOKIE } from '../utiles/auth/sessions.js';
 import { GUEST_USER_ID } from '../utiles/currentUser.js';
+import { limits, retryMessage } from '../utiles/auth/rateLimit.js';
 
 // Login y registro son formularios HTML comunes (POST + redirección), sin
 // React: no necesitan nada más, y funcionan aunque falle el JavaScript.
@@ -31,10 +32,25 @@ export function showRegister(req, res) {
   renderForm(res, 'register', { next: req.query.next });
 }
 
+// Respuesta de "demasiados intentos" (429), con Retry-After para clientes que lo usen
+function tooMany(res, view, seconds, values, next) {
+  res.set('Retry-After', String(seconds));
+  renderForm(res, view, { status: 429, values, error: retryMessage(seconds), next });
+}
+
+// Límite de intentos (ver utiles/auth/rateLimit.js): por IP y por usuario.
+// Mientras está bloqueado se responde 429 aunque la contraseña sea correcta:
+// si no, el bloqueo le avisaría al atacante cuándo acertó.
 export async function login(req, res) {
   const { data, fields } = validateLogin(req.body);
   const next = req.body?.next;
   const values = { username: req.body?.username ?? '' }; // la contraseña nunca se devuelve
+
+  const blocked = Math.max(limits.loginByIp.blockedFor(req.ip), limits.loginByUser.blockedFor(data.username));
+  if (blocked) return tooMany(res, 'login', blocked, values, next);
+  const ipBlock = limits.loginByIp.hit(req.ip);
+  if (ipBlock) return tooMany(res, 'login', ipBlock, values, next);
+
   if (hasErrors(fields)) return renderForm(res, 'login', { status: 400, fields, values, next });
 
   const user = await prisma.user.findUnique({ where: { username: data.username } });
@@ -42,8 +58,13 @@ export async function login(req, res) {
     ? await verifyPassword(data.password, user.passwordHash)
     : await dummyVerify(data.password); // mismo tiempo si el usuario no existe
   // Mismo mensaje para los dos casos: no revela qué usuarios existen
-  if (!ok) return renderForm(res, 'login', { status: 401, values, error: 'Usuario o contraseña incorrectos', next });
+  if (!ok) {
+    const userBlock = limits.loginByUser.hit(data.username);
+    if (userBlock) return tooMany(res, 'login', userBlock, values, next);
+    return renderForm(res, 'login', { status: 401, values, error: 'Usuario o contraseña incorrectos', next });
+  }
 
+  limits.loginByUser.reset(data.username);
   await startSession(res, user.id, next);
 }
 
@@ -51,6 +72,9 @@ export async function register(req, res) {
   const { data, fields } = validateRegister(req.body);
   const next = req.body?.next;
   const values = { username: req.body?.username ?? '', name: req.body?.name ?? '' };
+  // Crear cuentas en masa desde un mismo lugar: límite por IP
+  const blocked = limits.registerByIp.hit(req.ip);
+  if (blocked) return tooMany(res, 'register', blocked, values, next);
   if (hasErrors(fields)) return renderForm(res, 'register', { status: 400, fields, values, next });
 
   const { password, ...profile } = data;

@@ -21,6 +21,7 @@ export async function startTestServer() {
   const { default: app } = await import('../../src/app.js');
   const { default: prisma } = await import('../../src/utiles/db.js');
   const { createSession, SESSION_COOKIE } = await import('../../src/utiles/auth/sessions.js');
+  const { resetAllLimits } = await import('../../src/utiles/auth/rateLimit.js');
 
   // Puerto 0: el sistema operativo asigna uno libre (no choca con `npm run dev`)
   const server = await new Promise(resolve => {
@@ -44,6 +45,7 @@ export async function startTestServer() {
     await prisma.group.deleteMany(); // cascade: miembros, tableros compartidos y uniones
     await prisma.user.deleteMany({ where: { id: { not: 1 } } });
     await prisma.session.deleteMany();
+    resetAllLimits(); // cada test arranca sin intentos acumulados
     await prisma.user.upsert({
       where: { id: 1 },
       update: { name: 'Invitado', username: null, passwordHash: null },

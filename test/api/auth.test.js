@@ -118,3 +118,31 @@ describe('login y logout', () => {
     assert.equal((await ctx.request('GET', '/api/goals', undefined, { cookie })).status, 401);
   });
 });
+
+describe('límite de intentos', () => {
+  beforeEach(async () => { await register(account()); });
+
+  it('5 contraseñas incorrectas bloquean la cuenta, aunque después acierte', async () => {
+    for (let i = 0; i < 5; i++) assert.equal((await login('joaco', 'incorrecta')).status, 401);
+    const blocked = await login('joaco', 'incorrecta');
+    assert.equal(blocked.status, 429);
+    assert.match(blocked.body, /Demasiados intentos/);
+
+    const right = await login('joaco', 'secreto123');
+    assert.equal(right.status, 429);
+    assert.equal(right.setCookie, null);
+  });
+
+  it('un login correcto borra los intentos fallidos anteriores', async () => {
+    for (let i = 0; i < 4; i++) await login('joaco', 'incorrecta');
+    assert.equal((await login('joaco', 'secreto123')).status, 302);
+    for (let i = 0; i < 4; i++) assert.equal((await login('joaco', 'incorrecta')).status, 401);
+  });
+
+  it('crear cuentas en masa desde una IP se frena', async () => {
+    // beforeEach ya registró una; 4 más permitidas, la 6.ª no
+    for (let i = 0; i < 4; i++) assert.equal((await register(account({ username: `u${i}x` }))).status, 302);
+    const res = await register(account({ username: 'otra' }));
+    assert.equal(res.status, 429);
+  });
+});
