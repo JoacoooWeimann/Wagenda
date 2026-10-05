@@ -20,6 +20,7 @@ ramas `develop` → `main` y decisiones técnicas documentadas.
 | **Prisma 6 + SQLite** | Modelo de datos, migraciones y consultas | SQLite no necesita un servidor aparte. Prisma está fijado en la versión 6 porque la 7 cambia el flujo clásico de generación del cliente |
 | **node:test** | Tests unitarios y de integración | Viene incluido en Node: no suma dependencias |
 | **node:crypto** | Hash de contraseñas (scrypt) y tokens de sesión | Viene incluido en Node: el login no suma dependencias (ver "Autenticación") |
+| **helmet** | Encabezados de seguridad (CSP, anti-iframe, HSTS) | Es el estándar de Express para esto: buenos valores por defecto y una CSP configurable (ver "Seguridad en producción") |
 
 Todo el proyecto usa **ESM** (`import`/`export`) con extensión `.js` explícita en
 los imports relativos.
@@ -46,6 +47,36 @@ npm run dev            # servidor con nodemon (se reinicia al cambiar el backend
 npm run watch:client   # recompila React al guardar cambios
 ```
 
+## Despliegue (Railway)
+
+La app está lista para [Railway](https://railway.com) (`railway.json`): cada push
+a la rama conectada despliega solo.
+
+1. **Nuevo proyecto → Deploy from GitHub repo** y elegir el repositorio (rama `main`).
+2. **Volumen persistente:** agregar un volumen montado en `/data`. Ahí viven la
+   base y los backups; sin volumen, cada deploy empezaría con la base vacía.
+3. **Variables de entorno:**
+
+   | Variable | Valor |
+   |---|---|
+   | `DATABASE_URL` | `file:/data/wagenda.db` |
+   | `NODE_ENV` | `production` |
+   | `BACKUP_DIR` | `/data/backups` (opcional: es el valor por defecto con esa base) |
+
+4. **Dominio:** Settings → Networking → Generate Domain (HTTPS automático).
+
+Al desplegar, Railway corre `npm run build:prod` y arranca con
+`npm run start:prod` (aplica las migraciones y levanta el servidor). Considera
+el deploy sano cuando `GET /health` responde `200`, y antes de reemplazar la
+versión anterior le manda `SIGTERM`: la app termina los pedidos en curso y
+cierra la base.
+
+**Backups:** todos los días se hace una copia de la base en `BACKUP_DIR` y se
+guardan los últimos 7 (`BACKUP_KEEP`). Están en el mismo volumen: protegen
+contra errores (un borrado, una migración fallida), no contra perder el volumen.
+Para una copia fuera del servidor, descargarla de vez en cuando con
+`railway ssh` (o `railway run`) y `cat /data/backups/<archivo> > copia.db`.
+
 ## Scripts
 
 | Script | Qué hace |
@@ -58,6 +89,9 @@ npm run watch:client   # recompila React al guardar cambios
 | `npm run db:migrate` | Crea y aplica una migración nueva (desarrollo) |
 | `npm run db:seed` | Crea el usuario invitado (idempotente) |
 | `npm run db:reset` | Borra la base, aplica todas las migraciones y corre el seed |
+| `npm run build:prod` | `prisma generate` + build del cliente (lo usa Railway al desplegar) |
+| `npm run start:prod` | `migrate deploy` + servidor: aplica las migraciones pendientes y arranca |
+| `npm run backup` | Hace el backup del día a mano (el mismo mecanismo que el automático) |
 | `npm test` | Corre todos los tests |
 | `npm run test:coverage` | Tests con reporte de cobertura |
 
@@ -620,6 +654,31 @@ Hasta la v1.3 devolvía siempre el invitado; con el login pasó a leer la sesió
 y **ningún controller cambió**: para eso estaba ese punto único. Un recurso de
 otro usuario responde `404`, igual que uno inexistente: no revela que existe.
 
+### Seguridad en producción
+- **`trust proxy`:** en Railway la app está detrás de un proxy HTTPS. Express
+  confía en sus encabezados `X-Forwarded-*` para saber que el pedido vino por
+  HTTPS (si no, la cookie `Secure` no se mandaría) y cuál es la IP real del
+  cliente (para el límite de intentos). Solo en producción: sin proxy, esos
+  encabezados los podría falsificar cualquiera.
+- **Límite de intentos** (`utiles/auth/rateLimit.js`, sin dependencias): 5
+  contraseñas incorrectas seguidas bloquean la cuenta 15 minutos (aunque cambie
+  la IP); 20 intentos de login por IP cada 15 minutos; 5 registros por IP por
+  hora. Mientras está bloqueado responde `429` **aunque la contraseña sea
+  correcta**: si no, el bloqueo le avisaría al atacante cuándo acertó. Vive en
+  memoria: alcanza para una instancia; con varias haría falta un almacén compartido.
+- **Encabezados (helmet):** una Content-Security-Policy hecha a medida: scripts
+  solo propios (no hay scripts en línea), estilos y fuentes propios y del CDN de
+  Bootstrap, nadie puede meter la app en un iframe. Si alguien lograra inyectar
+  un `<script>`, el navegador no lo ejecuta. HSTS solo en producción.
+- **Sesiones vencidas:** además de limpiarse al iniciar sesión, cada 6 horas se
+  borran las de todos (`jobs.js`).
+- **Backups:** `VACUUM INTO` hace una copia consistente con la app andando (y
+  compacta el archivo), sin herramientas externas. Si el servidor estuvo
+  apagado a la hora del backup, se hace al arrancar: cada hora se asegura de que
+  exista el del día.
+- **CI:** GitHub Actions corre los tests y el build en cada push, con la versión
+  mínima de Node que declaramos.
+
 ### Autenticación
 - **Contraseñas con scrypt** (`node:crypto`, sin dependencias). Es un hash
   *lento* y *memory-hard*: verificar una contraseña tarda decenas de
@@ -646,7 +705,7 @@ otro usuario responde `404`, igual que uno inexistente: no revela que existe.
 - **El usuario invitado:** la primera cuenta registrada se queda con el
   usuario 1 y sus datos. El `updateMany` filtra por `passwordHash: null`, así
   que solo puede pasar una vez.
-- **Pendiente:** limitar intentos de login por IP (fuerza bruta online).
+- **Límite de intentos:** ver "Seguridad en producción".
 
 ### El algoritmo es puro y determinista
 `generatePlan` recibe un objetivo validado y devuelve el plan en memoria, sin
@@ -697,7 +756,7 @@ Los tests de integración usan una base SQLite propia por proceso
 (`prisma/test-<pid>.db`), creada con las mismas migraciones y borrada al
 terminar: nunca tocan `dev.db`. La app escucha en el puerto 0 (el sistema
 operativo asigna uno libre), así los tests pueden correr con el servidor de
-desarrollo levantado. Hay 320 tests; la lógica de planificación está cubierta
+desarrollo levantado. Hay 334 tests; la lógica de planificación está cubierta
 al 100%.
 
 ## Roadmap
@@ -713,5 +772,7 @@ al 100%.
 - [x] Mi semana (franjas y rutina), agenda del día con horarios y planificador de objetivos en el tiempo libre
 - [ ] Rediseño de las demás páginas (calendario, objetivos, seguimientos, grupos)
 - [x] Rutina que suma actividad a su seguimiento (tildar cada día si se hizo)
-- [ ] Límite de intentos de login (fuerza bruta)
+- [x] **v2.1** — Producción y seguridad: despliegue en Railway, health check, límite de intentos, encabezados de seguridad, backups diarios, limpieza de sesiones y CI
+- [ ] **v2.2** — Cuenta: cambiar nombre y contraseña, cerrar sesión en todos los dispositivos, borrar la cuenta, recuperar el acceso
+- [ ] **v2.3** — Rediseño de Calendario, Objetivos y Grupos, guía de primer uso, PWA, términos y privacidad
 - [ ] Rangos con nombre en los seguimientos (escala ordinal, ej. rangos de CS2)
