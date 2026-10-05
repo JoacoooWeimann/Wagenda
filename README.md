@@ -80,6 +80,7 @@ src/
     currentUser.js         Único punto que decide el usuario del pedido
     auth/                  Hash de contraseñas y sesiones
     groups/                Código de invitación y sincronización de copias (sharing.js)
+    schedule/              Huecos libres (slots.js, compartido con el cliente) y carga de la agenda
     queries.js / responses.js
     validation/            Validación de entrada (funciones puras)
     planning/              Algoritmo de planificación y cambio de plazo (funciones puras)
@@ -90,7 +91,8 @@ src/
     css/layout.css         Navegación: barra lateral o inferior
   client/                Todo lo que compila Vite (separado del backend)
     main.jsx / home.jsx / goals.jsx / trackers.jsx / groups.jsx   Una entrada por isla
-    components/home/       DayCard (la card del día del inicio)
+    components/home/       DayCard y DayAgenda (la card del día y su línea de tiempo)
+    components/week/       WeekPage y RoutineForm (Mi semana)
     components/calendar/   Calendar, DayModal, DayPanel, TaskItem, TaskForm, SessionLogger
     components/goals/      GoalsPage, GoalForm, GoalCard, PlanWeeks, GoalInfoForm, DeadlineForm
     components/trackers/   TrackersPage, TrackerSection, ItemCard, formularios, gráficos (Sparkline, ActivityBars)
@@ -113,6 +115,7 @@ no saben nada de HTTP ni de la base.
 User ─┬─< Session                    (sesiones iniciadas)
       ├─< Task                       (tareas sueltas)
       ├─< Goal ─< GoalWeek ─< Task   (tareas de un plan)
+      ├─< DayWindow / RoutineBlock   (Mi semana: franja de cada día y rutina fija)
       ├─< Tracker ─< TrackerItem ─< TrackerEntry   (seguimientos, sus ítems y los registros)
       │   Task >─○ Tracker / TrackerItem          (tarea que suma actividad)
       │   Goal >─○ TrackerItem                    (objetivo por fases vinculado a un ítem)
@@ -126,13 +129,15 @@ User ─┬─< Session                    (sesiones iniciadas)
 |---|---|
 | `User` | `name` (visible), `username` (único, para entrar), `passwordHash` |
 | `Session` | `tokenHash` (único), `expiresAt` |
-| `Task` | `title`, `startDate`/`endDate`, `priority`, `done`, `kind`, `goalWeekId?`, `trackerId?` + `itemId?` (seguimiento e ítem a los que suma), `category?` (solo tareas de objetivos) |
-| `Goal` | `title`, `type` (académico, físico, videojuego, profesional), `strategy` (divisible, fases), `startDate`, `deadline`, `status` (activo, logrado, abandonado), `closedAt?`, `itemId?` |
+| `Task` | `title`, `startDate`/`endDate`, `priority`, `done`, `kind`, `goalWeekId?`, `trackerId?` + `itemId?` (seguimiento e ítem a los que suma), `startMinute?`/`endMinute?` (horario), `category?` (solo tareas de objetivos) |
+| `Goal` | `title`, `type` (académico, físico, videojuego, profesional), `strategy` (divisible, fases), `startDate`, `deadline`, `status` (activo, logrado, abandonado), `closedAt?`, `itemId?`, `sessionMinutes?` + `timePreference?` (planificación con horarios) |
 | `GoalWeek` | `number`, `startDate`/`endDate`, `label` (ej. "Unidad 3 · TP 2", "Intensidad"), `target` (cuota) |
 | `Tracker` | `name`, `description?`, `itemLabel?` ("Ejercicio", "Materia") |
 | `TrackerItem` | `name`, `kind` (medicion, actividad), `unit?`, `higherIsBetter`, `trackerId` |
 | `TrackerEntry` | `date`, `value`, `note?` |
 | `Group` | `name`, `description?`, `inviteCode` (único), `weeklyLimit?` |
+| `DayWindow` | `weekday` (0 = lunes), `startMinute`, `endMinute` (único por usuario y día) |
+| `RoutineBlock` | `weekday`, `startMinute`, `endMinute`, `title`, `trackerId?` |
 | `GroupMember` | `role` (owner, member) |
 
 - Las tareas de un plan **son `Task` comunes**: aparecen en el calendario y se
@@ -187,7 +192,9 @@ Para objetivos del tipo "correr 10 km" o "subir de rango".
   Evaluación). Apertura y cierre duran 1 semana; las dos del medio se reparten el
   resto. Requiere al menos 4 semanas.
 - Cada semana tiene una **cuota de sesiones** (proporcional en semanas parciales).
-  No se fijan días: el usuario **registra cada sesión el día que la hace**.
+  Sin horarios, no se fijan días: el usuario **registra cada sesión el día que
+  la hace**. Con horarios (ver 9), las sesiones se planifican con día y hora y
+  se tildan al hacerlas; igual se pueden registrar sesiones extra.
 - El algoritmo no conoce los tipos de objetivo: el tipo solo elige los textos de
   las fases y la estrategia sugerida. Agregar un tipo es agregar una fila a
   `planning/templates.js`.
@@ -241,6 +248,45 @@ sin borrarlo, para conservar el historial. Cerrado, es de solo lectura (no se
 registran sesiones ni se edita el plan o sus tareas); el calendario oculta lo
 pendiente y sigue mostrando lo hecho. **Cerrar no borra nada**: al reabrirlo
 vuelve todo. Los cerrados se listan aparte, en "Historial".
+
+### 9. Planificación con horarios
+Un objetivo puede planificarse **en el tiempo libre real** del usuario: cada
+sesión queda con día y horario, sin pisar su rutina.
+
+- **Mi semana:** el usuario carga la franja en la que está disponible cada día
+  de la semana (si no, 08:00–23:00) y su rutina fija (trabajo, cursada,
+  entrenamiento), opcionalmente vinculada a un seguimiento. Los bloques de un
+  mismo día no se superponen.
+- **Horarios en minutos desde las 00:00** (`540` = 09:00), en hora local, igual
+  que las fechas de calendario: un entero se compara y se suma sin zonas
+  horarias. Nada cruza la medianoche.
+- **Tiempo libre de un día** (`freeSlots`, `schedule/slots.js`): la franja menos
+  la rutina, las tareas con horario y lo ya ubicado, con **15 minutos de
+  margen** alrededor de cada cosa.
+- **Entrada:** por fases, cuánto dura cada sesión; por contenido, cuánto lleva
+  cada uno ("Unidad · 6 · 120 min") y el tope de una sentada. Y un horario
+  preferido: mañana (6–12), tarde (12–19), noche (19–24) o cualquiera.
+- **Algoritmo** (`planning/schedule.js`, puro):
+  1. Las N sesiones de la semana se reparten **parejas** en sus días (días ideales).
+  2. En cada día, el primer hueco que entra **dentro del horario preferido**; si
+     no hay, cualquier hueco del día (`pickSlot`).
+  3. Si el día ideal no tiene lugar, se prueban **los días siguientes** de la
+     semana y después los anteriores.
+  4. Lo ubicado ocupa lugar: dos sesiones no se pisan.
+  5. Sin lugar en toda la semana, la sesión queda **sin horario** en su día
+     ideal y la vista previa **avisa** (para liberar tiempo o moverla).
+- Por contenido, cada contenido se divide en sentadas parejas de hasta el tope
+  ("Unidad 3 · 1/2", "2/2"), redondeadas a 5 minutos; la cuota de la semana
+  pasa a contar sentadas.
+- **El algoritmo sigue siendo puro:** el controller arma la "agenda" (franjas,
+  rutina y tareas con horario del rango, `schedule/agenda.js`) y se la pasa.
+  Por eso se testea sin base de datos.
+- **Cambiar el plazo:** las semanas nuevas reciben sesiones ubicadas igual; al
+  acortar, las sesiones pendientes planificadas de las semanas quitadas se
+  descartan (amontonadas inflarían la última semana) y lo que se mueve queda
+  sin horario.
+- **Objetivos anteriores:** sin `sessionMinutes`, el plan es el de siempre. No
+  se movió nada.
 
 ## Seguimientos
 
@@ -376,6 +422,7 @@ Sin sesión responden `401`; el cliente redirige al login.
 | `startDate` | Obligatorio, `"YYYY-MM-DD"` |
 | `endDate` | `"YYYY-MM-DD"`, mayor o igual que `startDate`. Si no viene, es igual a `startDate` |
 | `priority` | `baja`, `normal` o `alta` (por defecto `normal`) |
+| `startMinute`, `endMinute` | Opcionales, minutos desde las 00:00: los dos o ninguno, fin después del inicio y solo en tareas de un día. Si la tarea pasa a ser de varios días (ej. al moverla de semana), se borra el horario |
 | `trackerId`, `itemId` | Opcionales: seguimiento propio y uno de sus ítems, o `null`. Con `itemId`, el seguimiento sale del ítem. Reemplazan a la categoría escrita (`category` ya no se acepta) |
 | `done` | `true` o `false` (booleano estricto) |
 
@@ -400,13 +447,28 @@ Sin sesión responden `401`; el cliente redirige al login.
 | `type` | `academico`, `fisico`, `videojuego` o `profesional` |
 | `strategy` | `divisible` o `fases`. Si no viene, la sugerida para el tipo |
 | `startDate`, `deadline` | `"YYYY-MM-DD"`, `deadline ≥ startDate`, hasta 52 semanas |
-| `contents` | Solo `divisible`: `[{ name, count }]`, 1–5 tipos, 1–100 de cada uno, sin nombres repetidos |
+| `contents` | Solo `divisible`: `[{ name, count, minutes? }]`, 1–5 tipos, 1–100 de cada uno, sin nombres repetidos. `minutes` (15–1200) es obligatorio con horarios |
+| `sessionMinutes` | Opcional, 15–240: planifica con horarios (duración de la sesión o tope de una sentada) |
+| `timePreference` | Con horarios: `manana`, `tarde`, `noche` o `cualquiera` (por defecto) |
 | `reviewWeek` | Solo `divisible`, booleano (por defecto `true`) |
 | `sessionsPerWeek` | Solo `fases`, entero 1–7 |
 | `itemId` | Solo `fases`, opcional: id de un ítem propio |
 
 Sobre un objetivo cerrado, todo lo que modifica el plan responde `400` con
 `fields.status`.
+
+### Mi semana
+
+| Método | Ruta | Descripción | Respuesta OK |
+|---|---|---|---|
+| `GET` | `/api/week` | Las 7 franjas (con la de por defecto si no se configuró) y la rutina | `200` + semana |
+| `PUT` | `/api/week/windows/:weekday` | `{ startMinute, endMinute }`: franja de un día (0 = lunes) | `200` + semana |
+| `POST` | `/api/routine` | `{ title, weekdays: [0..6], startMinute, endMinute, trackerId? }`: un bloque en varios días a la vez (si alguno se superpone, no se crea ninguno) | `201` + semana |
+| `PATCH` | `/api/routine/:id` | Actualiza solo los campos enviados (`weekday`, horario, título, seguimiento) | `200` + semana |
+| `DELETE` | `/api/routine/:id` | Borra el bloque | `200` + semana |
+
+La vista previa y la creación de un objetivo con horarios devuelven además
+`warnings` (semanas con sesiones sin lugar); el cambio de plazo también.
 
 ### Seguimientos e ítems
 
@@ -497,6 +559,13 @@ Una sola lista de secciones (`partials/navigation.ejs`) que el CSS muestra como
 **barra lateral** en pantallas anchas y como **barra inferior** en el celular,
 siempre a un toque y sin menú hamburguesa. No usa JavaScript: el menú de
 usuario del celular es un `<details>`, y por eso ya no se carga el JS de Bootstrap.
+
+### Un cálculo de huecos compartido
+`schedule/slots.js` (huecos libres, intervalos, `HH:MM`) es puro y sin
+dependencias, y lo importan **tanto el servidor como el cliente**: la agenda
+que se ve en la card y el planificador usan exactamente el mismo cálculo de
+tiempo libre. Es la única excepción a "el cliente no importa código del
+backend", justificada porque dos implementaciones podrían no coincidir.
 
 ### El inicio: la card del día
 Con sesión, `/` muestra un día con sus tareas (`DayCard`), que se recorre como
@@ -617,7 +686,7 @@ Los tests de integración usan una base SQLite propia por proceso
 (`prisma/test-<pid>.db`), creada con las mismas migraciones y borrada al
 terminar: nunca tocan `dev.db`. La app escucha en el puerto 0 (el sistema
 operativo asigna uno libre), así los tests pueden correr con el servidor de
-desarrollo levantado. Hay 263 tests; la lógica de planificación está cubierta
+desarrollo levantado. Hay 312 tests; la lógica de planificación está cubierta
 al 100%.
 
 ## Roadmap
@@ -630,6 +699,8 @@ al 100%.
 - [x] **v1.4** — Login y múltiples usuarios: registro, sesiones propias con scrypt, la primera cuenta reclama los datos del invitado
 - [x] **v1.5** — Grupos de amigos: tableros compartidos a los que cada miembro elige unirse (copias vinculadas), ranking por seguimiento, límite semanal anti-spam y administración del grupo
 - [x] **v2.0** — Rediseño: tema oscuro con design tokens, navegación lateral/inferior y el inicio con la card del día; tareas como mini-cards; seguimientos como áreas con ítems y actividad de las tareas
+- [x] Mi semana (franjas y rutina), agenda del día con horarios y planificador de objetivos en el tiempo libre
 - [ ] Rediseño de las demás páginas (calendario, objetivos, seguimientos, grupos)
+- [ ] Rutina que suma actividad a su seguimiento (marcar cada día si se hizo)
 - [ ] Límite de intentos de login (fuerza bruta)
 - [ ] Rangos con nombre en los seguimientos (escala ordinal, ej. rangos de CS2)
