@@ -1,0 +1,27 @@
+# Corre los tests y compila el cliente en cada push y en cada pull request.
+# Si algo falla, GitHub lo marca en el commit antes de llegar a main.
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # prisma.config.js la exige; los tests usan su propia base (test/helpers/server.js)
+      DATABASE_URL: file:./ci.db
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12   # el mínimo de "engines": si anda acá, anda en lo que soportamos
+          cache: npm
+
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm test
+      - run: npm run build
