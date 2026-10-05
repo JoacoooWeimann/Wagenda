@@ -26,6 +26,8 @@ los imports relativos.
 
 ## Instalación
 
+Requiere **Node.js 20.19+ o 22.12+** (lo exige Vite 8; está declarado en `engines` de `package.json`).
+
 Requiere **Node.js 22.5 o superior** (desarrollado con Node 24).
 
 ```bash
