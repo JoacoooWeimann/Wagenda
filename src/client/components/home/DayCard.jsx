@@ -168,7 +168,7 @@ export default function DayCard({ initialDate, today }) {
                 tasks={dayTasks}
                 sessionGoals={sessionGoalsFor(goals, date, today)}
               trackers={trackers}
-              agenda={week && agendaFor(week, date)}
+              agenda={week && { ...agendaFor(week, date), canMarkRoutine: date <= today }}
                 onTaskSaved={handleTaskSaved}
                 onTaskRemoved={handleTaskRemoved}
               />

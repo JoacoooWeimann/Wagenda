@@ -129,7 +129,7 @@ User ─┬─< Session                    (sesiones iniciadas)
 |---|---|
 | `User` | `name` (visible), `username` (único, para entrar), `passwordHash` |
 | `Session` | `tokenHash` (único), `expiresAt` |
-| `Task` | `title`, `startDate`/`endDate`, `priority`, `done`, `kind`, `goalWeekId?`, `trackerId?` + `itemId?` (seguimiento e ítem a los que suma), `startMinute?`/`endMinute?` (horario), `category?` (solo tareas de objetivos) |
+| `Task` | `title`, `startDate`/`endDate`, `priority`, `done`, `kind`, `goalWeekId?`, `trackerId?` + `itemId?` (seguimiento e ítem a los que suma), `startMinute?`/`endMinute?` (horario), `routineBlockId?` (rutina hecha), `category?` (solo tareas de objetivos) |
 | `Goal` | `title`, `type` (académico, físico, videojuego, profesional), `strategy` (divisible, fases), `startDate`, `deadline`, `status` (activo, logrado, abandonado), `closedAt?`, `itemId?`, `sessionMinutes?` + `timePreference?` (planificación con horarios) |
 | `GoalWeek` | `number`, `startDate`/`endDate`, `label` (ej. "Unidad 3 · TP 2", "Intensidad"), `target` (cuota) |
 | `Tracker` | `name`, `description?`, `itemLabel?` ("Ejercicio", "Materia") |
@@ -287,6 +287,15 @@ sesión queda con día y horario, sin pisar su rutina.
   sin horario.
 - **Objetivos anteriores:** sin `sessionMinutes`, el plan es el de siempre. No
   se movió nada.
+- **Bloques que cruzan la medianoche** (trabajo de 22:00 a 06:00) se guardan como
+  dos tramos, uno en cada día (`splitOvernight`): todo lo demás sigue
+  trabajando con intervalos de un solo día.
+- **Rutina hecha:** en la agenda del día, cada bloque de rutina se tilda si se
+  hizo ("fui al gimnasio"), solo hoy o días pasados. Tildarlo crea una tarea
+  hecha de ese día con su horario y su seguimiento (`Task.routineBlockId`, única
+  por bloque y fecha): suma actividad, aparece en el calendario y en los
+  rankings como cualquier tarea. Destildarlo la borra. Borrar el bloque no borra
+  ese historial (`SetNull`).
 
 ## Seguimientos
 
@@ -465,7 +474,9 @@ Sobre un objetivo cerrado, todo lo que modifica el plan responde `400` con
 | `PUT` | `/api/week/windows/:weekday` | `{ startMinute, endMinute }`: franja de un día (0 = lunes) | `200` + semana |
 | `POST` | `/api/routine` | `{ title, weekdays: [0..6], startMinute, endMinute, trackerId? }`: un bloque en varios días a la vez (si alguno se superpone, no se crea ninguno) | `201` + semana |
 | `PATCH` | `/api/routine/:id` | Actualiza solo los campos enviados (`weekday`, horario, título, seguimiento) | `200` + semana |
-| `DELETE` | `/api/routine/:id` | Borra el bloque | `200` + semana |
+| `DELETE` | `/api/routine/:id` | Borra el bloque (lo que ya se tildó queda) | `200` + semana |
+| `PUT` | `/api/routine/:id/done/:date` | Tilda el bloque ese día: crea la tarea hecha (idempotente). La fecha tiene que ser de su día de la semana | `201` + tarea |
+| `DELETE` | `/api/routine/:id/done/:date` | Destilda: borra esa tarea | `200` + `{ ok: true }` |
 
 La vista previa y la creación de un objetivo con horarios devuelven además
 `warnings` (semanas con sesiones sin lugar); el cambio de plazo también.
@@ -686,7 +697,7 @@ Los tests de integración usan una base SQLite propia por proceso
 (`prisma/test-<pid>.db`), creada con las mismas migraciones y borrada al
 terminar: nunca tocan `dev.db`. La app escucha en el puerto 0 (el sistema
 operativo asigna uno libre), así los tests pueden correr con el servidor de
-desarrollo levantado. Hay 312 tests; la lógica de planificación está cubierta
+desarrollo levantado. Hay 320 tests; la lógica de planificación está cubierta
 al 100%.
 
 ## Roadmap
@@ -701,6 +712,6 @@ al 100%.
 - [x] **v2.0** — Rediseño: tema oscuro con design tokens, navegación lateral/inferior y el inicio con la card del día; tareas como mini-cards; seguimientos como áreas con ítems y actividad de las tareas
 - [x] Mi semana (franjas y rutina), agenda del día con horarios y planificador de objetivos en el tiempo libre
 - [ ] Rediseño de las demás páginas (calendario, objetivos, seguimientos, grupos)
-- [ ] Rutina que suma actividad a su seguimiento (marcar cada día si se hizo)
+- [x] Rutina que suma actividad a su seguimiento (tildar cada día si se hizo)
 - [ ] Límite de intentos de login (fuerza bruta)
 - [ ] Rangos con nombre en los seguimientos (escala ordinal, ej. rangos de CS2)

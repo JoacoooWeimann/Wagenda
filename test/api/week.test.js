@@ -88,3 +88,46 @@ describe('Mi semana', () => {
     assert.equal((await ctx.request('POST', '/api/routine', work({ trackerId: foreignTracker.id }))).body.fields.trackerId, 'Seguimiento no encontrado');
   });
 });
+
+describe('rutina hecha', () => {
+  async function gym() {
+    const tracker = await ok(ctx.request('POST', '/api/trackers', { name: 'Gimnasio' }), 201);
+    const week = await ok(ctx.request('POST', '/api/routine', { title: 'Gimnasio', weekdays: [0], startMinute: h(8), endMinute: h(10), trackerId: tracker.id }), 201);
+    return { tracker, block: week.routine[0] };
+  }
+
+  it('tildar crea una tarea hecha de ese día con horario y seguimiento; suma actividad', async () => {
+    const { tracker, block } = await gym();
+    const task = await ok(ctx.request('PUT', `/api/routine/${block.id}/done/2026-10-05`), 201); // lunes
+    assert.deepEqual([task.title, task.done, task.startMinute, task.endMinute, task.tracker.id, task.routineBlockId],
+      ['Gimnasio', true, h(8), h(10), tracker.id, block.id]);
+    assert.equal(task.startDate, '2026-10-05T00:00:00.000Z');
+
+    const again = await ok(ctx.request('PUT', `/api/routine/${block.id}/done/2026-10-05`)); // idempotente
+    assert.equal(again.id, task.id);
+    assert.deepEqual((await ok(ctx.request('GET', `/api/trackers/${tracker.id}`))).activity,
+      [{ date: '2026-10-05T00:00:00.000Z', count: 1 }]);
+  });
+
+  it('destildar la borra; la fecha tiene que ser del día del bloque', async () => {
+    const { block } = await gym();
+    await ok(ctx.request('PUT', `/api/routine/${block.id}/done/2026-10-05`), 201);
+    await ok(ctx.request('DELETE', `/api/routine/${block.id}/done/2026-10-05`));
+    assert.equal(await ctx.prisma.task.count(), 0);
+
+    assert.match((await ctx.request('PUT', `/api/routine/${block.id}/done/2026-10-06`)).body.fields.date, /día de la semana/);
+    assert.ok((await ctx.request('PUT', `/api/routine/${block.id}/done/ayer`)).body.fields.date);
+  });
+
+  it('borrar el bloque no borra el historial; no se tilda la rutina de otro', async () => {
+    const { block } = await gym();
+    const task = await ok(ctx.request('PUT', `/api/routine/${block.id}/done/2026-10-05`), 201);
+    await ok(ctx.request('DELETE', `/api/routine/${block.id}`));
+    const kept = await ctx.prisma.task.findUnique({ where: { id: task.id } });
+    assert.deepEqual([kept.done, kept.routineBlockId], [true, null]);
+
+    const other = await ctx.prisma.user.create({ data: { name: 'Otro' } });
+    const foreign = await ctx.prisma.routineBlock.create({ data: { title: 'x', weekday: 0, startMinute: 0, endMinute: 60, userId: other.id } });
+    assert.equal((await ctx.request('PUT', `/api/routine/${foreign.id}/done/2026-10-05`)).status, 404);
+  });
+});

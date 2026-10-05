@@ -254,3 +254,10 @@
   letter-spacing: 0.05em;
   color: var(--wg-text-subtle);
 }
+
+/* Rutina hecha: check del color de su seguimiento; tildada, en verde */
+.agenda-routine-row { align-items: center; }
+.agenda-routine-check { --task-priority: var(--tag); width: 22px; height: 22px; font-size: 0.8rem; }
+.agenda-routine-row.is-done .agenda-routine-check { background: var(--wg-success); border-color: var(--wg-success); color: var(--wg-on-primary); }
+.agenda-routine-row.is-done { background: color-mix(in srgb, var(--tag) 16%, transparent); }
+.agenda-routine-row.is-done .agenda-routine-title strong::after { content: ' ✓'; color: var(--wg-success); }

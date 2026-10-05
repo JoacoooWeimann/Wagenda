@@ -148,6 +148,13 @@ model Task {
   item      TrackerItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
   itemId    Int?
 
+  // Un bloque de rutina hecho ese día ("fui al gimnasio"): la tarea es el
+  // registro de que se hizo, y suma actividad a su seguimiento. Una por bloque y
+  // fecha. SetNull: borrar el bloque no borra el historial.
+  routineBlock   RoutineBlock? @relation(fields: [routineBlockId], references: [id], onDelete: SetNull)
+  routineBlockId Int?
+
+  @@unique([routineBlockId, startDate])
   @@index([goalWeekId])
   @@index([trackerId])
   @@index([itemId])
@@ -352,6 +359,7 @@ model RoutineBlock {
   userId    Int
   tracker   Tracker? @relation(fields: [trackerId], references: [id], onDelete: SetNull)
   trackerId Int?
+  done      Task[]   // los días en que se hizo
 
   @@index([userId, weekday])
 }

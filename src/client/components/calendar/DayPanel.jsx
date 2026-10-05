@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { updateTask, deleteTask } from '../../utiles/api.js';
+import { updateTask, deleteTask, markRoutineDone, unmarkRoutineDone } from '../../utiles/api.js';
 import { sortForDay } from '../../utiles/tasks.js';
 import { ErrorBanner } from '../common.jsx';
 import TaskItem from './TaskItem.jsx';
@@ -35,6 +35,8 @@ export default function DayPanel({ date, tasks, sessionGoals, trackers, agenda, 
   }
 
   async function toggleDone(task) {
+    // Una rutina hecha no se "desmarca" dejándola pendiente: se borra el registro
+    if (task.routineBlockId) return removeTask(task.id);
     try {
       onTaskSaved(await updateTask(task.id, { done: !task.done }), true);
     } catch (err) {
@@ -52,6 +54,20 @@ export default function DayPanel({ date, tasks, sessionGoals, trackers, agenda, 
     }
   }
 
+  // Rutina del día: tildar crea la tarea hecha (suma a su seguimiento); destildar la borra
+  async function toggleRoutine(block, doneTask) {
+    try {
+      if (doneTask) {
+        await unmarkRoutineDone(block.id, date);
+        onTaskRemoved(doneTask.id);
+      } else {
+        onTaskSaved(await markRoutineDone(block.id, date), false);
+      }
+    } catch (err) {
+      setError(`No se pudo marcar ${block.title}: ${err.message}`);
+    }
+  }
+
   function handleSaved(task, wasEditing) {
     onTaskSaved(task, wasEditing);
     closeForm();
@@ -62,7 +78,8 @@ export default function DayPanel({ date, tasks, sessionGoals, trackers, agenda, 
       <ErrorBanner message={error} onClose={() => setError(null)} />
 
       {dayAgenda && (
-        <DayAgenda agenda={dayAgenda} onToggle={toggleDone} onEdit={startEdit} onRemove={removeTask}
+        <DayAgenda agenda={dayAgenda} canMarkRoutine={agenda.canMarkRoutine} onToggle={toggleDone} onToggleRoutine={toggleRoutine}
+          onEdit={startEdit} onRemove={removeTask}
           onAddAt={(times) => { setEditingTask(null); setAdding({ times }); }} />
       )}
       {dayAgenda && <h4 className="day-section-title">Sin horario</h4>}

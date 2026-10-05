@@ -42,10 +42,18 @@ export function layoutColumns(items) {
 // Todo lo de un día para la agenda: rutina y tareas con horario (como
 // elementos con tipo), las tareas sin horario aparte, y los huecos libres
 // (de al menos `minFree` minutos, para no ofrecer huecos de 5 minutos)
+// Una tarea que registra un bloque de rutina hecho ("fui al gimnasio") no se
+// muestra como tarea: marca su bloque como hecho (`doneTask`).
 export function buildDayAgenda({ window, routine, tasks, minFree = 30 }) {
+  const blockIds = new Set(routine.map(r => r.id));
+  const doneByBlock = new Map(tasks.filter(t => blockIds.has(t.routineBlockId)).map(t => [t.routineBlockId, t]));
+  tasks = tasks.filter(t => !blockIds.has(t.routineBlockId));
   const timed = tasks.filter(hasTime);
   const items = [
-    ...routine.map(r => ({ type: 'routine', id: `r${r.id}`, startMinute: r.startMinute, endMinute: r.endMinute, block: r })),
+    ...routine.map(r => ({
+      type: 'routine', id: `r${r.id}`, startMinute: r.startMinute, endMinute: r.endMinute, block: r,
+      doneTask: doneByBlock.get(r.id) ?? null
+    })),
     ...timed.map(t => ({ type: 'task', id: `t${t.id}`, startMinute: t.startMinute, endMinute: t.endMinute, task: t }))
   ];
   return {

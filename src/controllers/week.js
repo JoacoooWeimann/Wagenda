@@ -7,6 +7,9 @@ import {
 import { currentUserId } from '../utiles/currentUser.js';
 import { overlaps, splitOvernight } from '../utiles/schedule/slots.js';
 import { loadWeek } from '../utiles/schedule/agenda.js';
+import { parseDateOnly } from '../utiles/dates.js';
+import { weekdayOf } from '../utiles/schedule/slots.js';
+import { TASK_WITH_GOAL } from '../utiles/queries.js';
 
 // "Mi semana": la franja activa de cada día y la rutina fija (trabajo,
 // cursada, entrenamiento). Es lo que usa el planificador para saber cuándo
@@ -114,4 +117,65 @@ export async function deleteRoutine(req, res) {
   if (!block) return;
   await prisma.routineBlock.delete({ where: { id: block.id } });
   res.json(await loadWeek(block.userId));
+}
+
+// --- Rutina hecha ("fui al gimnasio") ------------------------------------------
+// Tildar un bloque de la rutina en una fecha crea una tarea ya hecha de ese día,
+// con su horario y su seguimiento: así suma actividad, aparece en el calendario
+// y en los rankings como cualquier tarea. Destildarlo la borra. Una por bloque y
+// fecha (índice único). Que la fecha no sea futura lo controla la pantalla.
+
+// Fecha de la URL que corresponde al día de la semana del bloque, o null
+// (respuesta ya enviada)
+function blockDate(req, res, block) {
+  const date = parseDateOnly(req.params.date ?? req.body?.date);
+  if (!date) {
+    invalid(res, { date: 'Fecha inválida (formato YYYY-MM-DD)' });
+    return null;
+  }
+  if (weekdayOf(date) !== block.weekday) {
+    invalid(res, { date: 'Ese bloque no es de ese día de la semana' });
+    return null;
+  }
+  return date;
+}
+
+export async function markRoutineDone(req, res) {
+  const block = await findBlock(req, res);
+  if (!block) return;
+  const date = blockDate(req, res, block);
+  if (!date) return;
+
+  // Idempotente: si ya estaba tildado, devuelve la misma tarea
+  const existing = await prisma.task.findUnique({
+    where: { routineBlockId_startDate: { routineBlockId: block.id, startDate: date } },
+    include: TASK_WITH_GOAL
+  });
+  if (existing) return res.json(existing);
+
+  const task = await prisma.task.create({
+    data: {
+      title: block.title,
+      startDate: date,
+      endDate: date,
+      startMinute: block.startMinute,
+      endMinute: block.endMinute,
+      done: true,
+      userId: block.userId,
+      trackerId: block.trackerId,
+      routineBlockId: block.id
+    },
+    include: TASK_WITH_GOAL
+  });
+  res.status(201).json(task);
+}
+
+export async function unmarkRoutineDone(req, res) {
+  const block = await findBlock(req, res);
+  if (!block) return;
+  const date = blockDate(req, res, block);
+  if (!date) return;
+
+  await prisma.task.deleteMany({ where: { routineBlockId: block.id, startDate: date } });
+  res.json({ ok: true });
 }

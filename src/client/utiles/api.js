@@ -90,3 +90,5 @@ export const putWindow = (weekday, window) => request('PUT', `/api/week/windows/
 export const createRoutine = (block) => request('POST', '/api/routine', block);
 export const updateRoutine = (id, changes) => request('PATCH', `/api/routine/${id}`, changes);
 export const deleteRoutine = (id) => request('DELETE', `/api/routine/${id}`);
+export const markRoutineDone = (blockId, date) => request('PUT', `/api/routine/${blockId}/done/${date}`);
+export const unmarkRoutineDone = (blockId, date) => request('DELETE', `/api/routine/${blockId}/done/${date}`);
