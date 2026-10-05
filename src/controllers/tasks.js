@@ -15,6 +15,14 @@ import {
 
 const TASK_NOT_FOUND = 'Tarea no encontrada';
 
+// Una tarea solo suma a un seguimiento propio (puede ser la copia de uno
+// compartido: es suyo). Devuelve los errores por campo, o null.
+async function trackerError(trackerId, userId) {
+  if (!trackerId) return null;
+  const tracker = await prisma.tracker.findFirst({ where: { id: trackerId, userId } });
+  return tracker ? null : { trackerId: 'Seguimiento no encontrado' };
+}
+
 export async function getTasksForMonth(req, res) {
   const { data, fields } = validateMonthQuery(req.query);
   if (hasErrors(fields)) return invalid(res, fields);
@@ -41,8 +49,12 @@ export async function createTask(req, res) {
   const { data, fields } = validateTaskCreate(req.body);
   if (hasErrors(fields)) return invalid(res, fields);
 
+  const userId = currentUserId(req);
+  const badTracker = await trackerError(data.trackerId, userId);
+  if (badTracker) return invalid(res, badTracker);
+
   const task = await prisma.task.create({
-    data: { ...data, userId: currentUserId(req) },
+    data: { ...data, userId },
     include: TASK_WITH_GOAL
   });
 
@@ -86,6 +98,8 @@ export async function updateTask(req, res) {
     include: { goalWeek: { include: { goal: true } } }
   });
   if (!current) return notFound(res, TASK_NOT_FOUND);
+  const badTracker = await trackerError(data.trackerId, current.userId);
+  if (badTracker) return invalid(res, badTracker);
 
   // Si el PATCH trae una sola fecha, la otra sale de lo guardado
   const start = data.startDate ?? current.startDate;

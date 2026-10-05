@@ -5,7 +5,7 @@ import { validateGroupCreate, validateGroupUpdate } from '../utiles/validation/g
 import { currentUserId } from '../utiles/currentUser.js';
 import { generateInviteCode, normalizeInviteCode } from '../utiles/groups/inviteCode.js';
 import { joinShare, removeJoins, removeShares } from '../utiles/groups/sharing.js';
-import { trackerSummary, limitPerWeek } from '../utiles/trackers.js';
+import { trackerSummary, limitPerWeek, activityByTracker, cappedActivityTotal } from '../utiles/trackers.js';
 
 // Un grupo ajeno responde igual que uno inexistente: no revela que existe
 const GROUP_NOT_FOUND = 'Grupo no encontrado';
@@ -306,9 +306,19 @@ export async function getRanking(req, res) {
     include: { entries: ENTRIES }
   });
 
+  // Actividad: solo la cantidad de tareas hechas (nunca títulos ni fechas),
+  // con el mismo límite semanal que los registros
+  const activity = await activityByTracker(prisma, [...sources, ...copies].map(t => t.id));
+
   const row = (user, tracker) => {
-    const entries = limitPerWeek(tracker.entries, found.group.weeklyLimit);
-    return { user, isMe: user.id === found.userId, summary: trackerSummary(entries, tracker.higherIsBetter) };
+    const { weeklyLimit } = found.group;
+    const entries = limitPerWeek(tracker.entries, weeklyLimit);
+    return {
+      user,
+      isMe: user.id === found.userId,
+      summary: trackerSummary(entries, tracker.higherIsBetter),
+      activity: cappedActivityTotal(activity.get(tracker.id), weeklyLimit)
+    };
   };
 
   res.json({
@@ -318,6 +328,7 @@ export async function getRanking(req, res) {
       id: source.id,
       name: source.name,
       unit: source.unit,
+      kind: source.kind,
       higherIsBetter: source.higherIsBetter,
       rows: [
         row(owner, source),

@@ -9,7 +9,7 @@ export { parseId } from './common.js';
 
 export const PRIORITIES = ['baja', 'normal', 'alta'];
 
-export const LIMITS = { title: 100, description: 1000, category: 30 };
+export const LIMITS = { title: 100, description: 1000 };
 
 // Valida los campos presentes en `body`. Con `partial` (PATCH) ningún campo es
 // obligatorio; sin él (POST) se exigen title y startDate y se aplican defaults.
@@ -28,9 +28,12 @@ function validateTask(body, { partial }) {
     if (description !== undefined) data.description = description;
   }
 
-  if (has('category')) {
-    const category = optionalText(body.category, LIMITS.category, 'category', fields);
-    if (category !== undefined) data.category = category;
+  // Seguimiento al que suma actividad: un id, o null para desvincular. Que
+  // sea del usuario lo verifica el controller (necesita la base). `category` ya
+  // no se acepta: la clasificación es el seguimiento (whitelist: se ignora).
+  if (has('trackerId')) {
+    if (body.trackerId === null || (Number.isInteger(body.trackerId) && body.trackerId > 0)) data.trackerId = body.trackerId;
+    else fields.trackerId = 'Seguimiento inválido';
   }
 
   if (has('priority')) {

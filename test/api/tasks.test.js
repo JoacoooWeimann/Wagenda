@@ -57,11 +57,11 @@ describe('GET /api/tasks', () => {
 
 describe('PATCH /api/tasks/:id', () => {
   it('actualiza solo los campos enviados', async () => {
-    const task = await create({ category: 'facu' });
+    const task = await create({ description: 'detalle' });
     const res = await ctx.request('PATCH', `/api/tasks/${task.id}`, { done: true });
     assert.equal(res.status, 200);
     assert.equal(res.body.done, true);
-    assert.equal(res.body.category, 'facu');
+    assert.equal(res.body.description, 'detalle');
   });
 
   it('valida el fin contra el inicio guardado en la base', async () => {

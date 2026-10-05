@@ -35,3 +35,32 @@ export function limitPerWeek(entries, limit) {
     return count < limit;
   });
 }
+
+// Actividad de un seguimiento: cuántas tareas vinculadas se hicieron cada día,
+// como [{ date, count }] (solo fechas y cantidades). La fecha es la de la
+// tarea: su fin, el día en que tenía que estar hecha. Los rangos de semanas
+// los arma el cliente, que es quien sabe qué día es hoy.
+export async function activityByTracker(prisma, trackerIds) {
+  const rows = await prisma.task.groupBy({
+    by: ['trackerId', 'endDate'],
+    where: { trackerId: { in: trackerIds }, done: true },
+    _count: { _all: true },
+    orderBy: { endDate: 'asc' }
+  });
+  const byTracker = new Map(trackerIds.map(id => [id, []]));
+  for (const row of rows) byTracker.get(row.trackerId).push({ date: row.endDate, count: row._count._all });
+  return byTracker;
+}
+
+// Total de tareas hechas con el límite semanal de un grupo: de cada semana
+// (lunes a domingo) cuentan como mucho `limit`. Sin límite, la suma.
+export function cappedActivityTotal(activity, limit) {
+  const perWeek = new Map();
+  for (const { date, count } of activity) {
+    const week = weekStart(date);
+    perWeek.set(week, (perWeek.get(week) ?? 0) + count);
+  }
+  let total = 0;
+  for (const count of perWeek.values()) total += limit ? Math.min(count, limit) : count;
+  return total;
+}

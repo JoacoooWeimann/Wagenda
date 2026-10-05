@@ -4,6 +4,7 @@ import { parseDateOnly } from '../dates.js';
 import { optionalText, requiredText, hasErrors } from './common.js';
 
 export const TRACKER_LIMITS = { name: 40, unit: 10, note: 200, value: 1e9 };
+export const TRACKER_KINDS = ['medicion', 'actividad'];
 export const BOARD_LIMITS = { name: 40, description: 200 };
 
 // Campos del seguimiento. `partial`: en la edición todos son opcionales.
@@ -14,6 +15,12 @@ function trackerFields(body, { partial }) {
   if (!partial || body.name !== undefined) {
     const name = requiredText(body.name, TRACKER_LIMITS.name, 'name', fields, 'El nombre es obligatorio');
     if (name !== undefined) data.name = name;
+  }
+
+  // medicion (valores) o actividad (cuenta tareas); si no viene al crear, medición
+  if (body.kind !== undefined) {
+    if (TRACKER_KINDS.includes(body.kind)) data.kind = body.kind;
+    else fields.kind = 'Tipo inválido';
   }
 
   if (body.unit !== undefined) {

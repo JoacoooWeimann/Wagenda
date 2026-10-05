@@ -196,3 +196,71 @@ describe('tableros', () => {
     assert.equal(move.body.fields.boardId, 'Tablero no encontrado');
   });
 });
+
+describe('tareas vinculadas a un seguimiento', () => {
+  const task = (body) => ctx.request('POST', '/api/tasks', { title: 'Estudiar', startDate: '2026-10-05', ...body });
+
+  it('una tarea se vincula a un seguimiento propio y lo trae en la respuesta', async () => {
+    const facultad = await createTracker({ name: 'Facultad', kind: 'actividad' });
+    const res = await task({ trackerId: facultad.id });
+    assert.equal(res.status, 201);
+    assert.deepEqual(res.body.tracker, { id: facultad.id, name: 'Facultad', kind: 'actividad' });
+
+    const unlinked = await ctx.request('PATCH', `/api/tasks/${res.body.id}`, { trackerId: null });
+    assert.equal(unlinked.body.tracker, null);
+  });
+
+  it('no se vincula a un seguimiento ajeno', async () => {
+    const other = await ctx.prisma.user.create({ data: { name: 'Otro' } });
+    const foreign = await ctx.prisma.tracker.create({ data: { name: 'Ajeno', userId: other.id } });
+    assert.equal((await task({ trackerId: foreign.id })).body.fields.trackerId, 'Seguimiento no encontrado');
+  });
+
+  it('borrar el seguimiento no borra sus tareas', async () => {
+    const facultad = await createTracker({ name: 'Facultad', kind: 'actividad' });
+    const created = (await task({ trackerId: facultad.id })).body;
+    await ctx.request('DELETE', `/api/trackers/${facultad.id}`);
+    assert.equal((await ctx.prisma.task.findUnique({ where: { id: created.id } })).trackerId, null);
+  });
+
+  it('las sesiones de un objetivo con seguimiento suman a ese seguimiento', async () => {
+    const tracker = await createTracker();
+    const goal = (await ctx.request('POST', '/api/goals', running({ trackerId: tracker.id }))).body;
+    const session = await ctx.request('POST', `/api/goals/${goal.id}/sessions`, { date: '2026-10-06' });
+    assert.equal(session.body.tracker.id, tracker.id);
+  });
+});
+
+describe('actividad de un seguimiento', () => {
+  it('cuenta las tareas hechas por día (fecha de fin) y no las pendientes', async () => {
+    const facultad = await createTracker({ name: 'Facultad', kind: 'actividad' });
+    const add = async (startDate, endDate, done) => {
+      const t = (await ctx.request('POST', '/api/tasks', { title: 'x', startDate, endDate, trackerId: facultad.id })).body;
+      if (done) await ctx.request('PATCH', `/api/tasks/${t.id}`, { done: true });
+    };
+    await add('2026-10-05', '2026-10-05', true);
+    await add('2026-10-05', '2026-10-05', true);
+    await add('2026-10-03', '2026-10-07', true);  // varios días: cuenta el fin
+    await add('2026-10-06', '2026-10-06', false); // pendiente: no cuenta
+
+    const { body } = await ctx.request('GET', `/api/trackers/${facultad.id}`);
+    assert.equal(body.kind, 'actividad');
+    assert.deepEqual(body.activity, [
+      { date: '2026-10-05T00:00:00.000Z', count: 2 },
+      { date: '2026-10-07T00:00:00.000Z', count: 1 }
+    ]);
+  });
+
+  it('valida el tipo y lista las opciones para elegir', async () => {
+    assert.ok((await ctx.request('POST', '/api/trackers', { name: 'x', kind: 'otro' })).body.fields.kind);
+    const board = (await ctx.request('POST', '/api/boards', { name: 'Gimnasio' })).body;
+    await createTracker({ name: 'Press banca', unit: 'kg', boardId: board.id });
+    await createTracker({ name: 'Facultad', kind: 'actividad' });
+    const options = (await ctx.request('GET', '/api/trackers/options')).body;
+    assert.deepEqual(options.map(o => [o.name, o.kind, o.board?.name ?? null]), [
+      ['Facultad', 'actividad', null],
+      ['Press banca', 'medicion', 'Gimnasio']
+    ]);
+    assert.equal('entries' in options[0], false);
+  });
+});

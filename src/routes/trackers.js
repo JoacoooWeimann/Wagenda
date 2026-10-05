@@ -1,12 +1,13 @@
 import express from 'express';
 import {
-  listTrackers, getTracker, createTracker, updateTracker, deleteTracker, addEntry, deleteEntry
+  listTrackers, trackerOptions, getTracker, createTracker, updateTracker, deleteTracker, addEntry, deleteEntry
 } from '../controllers/trackers.js';
 
 const router = express.Router();
 
 router.get('/api/trackers', listTrackers);
 router.post('/api/trackers', createTracker);
+router.get('/api/trackers/options', trackerOptions); // antes que /:id
 router.get('/api/trackers/:id', getTracker);
 router.patch('/api/trackers/:id', updateTracker);
 router.delete('/api/trackers/:id', deleteTracker);

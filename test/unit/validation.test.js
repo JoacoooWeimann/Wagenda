@@ -38,14 +38,18 @@ describe('validateTaskCreate', () => {
   it('aplica los límites de longitud', () => {
     assert.ok(validateTaskCreate({ ...valid, title: 'x'.repeat(101) }).fields.title);
     assert.ok(validateTaskCreate({ ...valid, description: 'x'.repeat(1001) }).fields.description);
-    assert.ok(validateTaskCreate({ ...valid, category: 'x'.repeat(31) }).fields.category);
     assert.deepEqual(validateTaskCreate({ ...valid, title: 'x'.repeat(100) }).fields, {});
   });
 
-  it('convierte descripción y categoría vacías en null', () => {
-    const { data } = validateTaskCreate({ ...valid, description: '  ', category: '' });
-    assert.equal(data.description, null);
-    assert.equal(data.category, null);
+  it('convierte la descripción vacía en null', () => {
+    assert.equal(validateTaskCreate({ ...valid, description: '  ' }).data.description, null);
+  });
+
+  it('trackerId: un id o null; la categoría escrita ya no se acepta', () => {
+    assert.equal(validateTaskCreate({ ...valid, trackerId: 3 }).data.trackerId, 3);
+    assert.equal(validateTaskUpdate({ trackerId: null }).data.trackerId, null);
+    assert.ok(validateTaskCreate({ ...valid, trackerId: 'facu' }).fields.trackerId);
+    assert.equal('category' in validateTaskCreate({ ...valid, category: 'Facultad' }).data, false);
   });
 
   it('solo acepta prioridades de la lista', () => {

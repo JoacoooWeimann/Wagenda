@@ -238,7 +238,8 @@ export async function logSession(req, res) {
         kind: 'sesion',
         category: TYPE_LABELS[goal.type],
         userId,
-        goalWeekId: week.id
+        goalWeekId: week.id,
+        trackerId: goal.trackerId // suma actividad al seguimiento del objetivo
       },
       include: TASK_WITH_GOAL
     }),

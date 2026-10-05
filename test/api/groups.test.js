@@ -143,6 +143,7 @@ describe('tableros compartidos', () => {
       ['lucia', 60, 3]
     ]);
     assert.ok(!JSON.stringify(ranking).includes('privada'));
+    assert.deepEqual(benchRows.map(r => r.activity), [0, 0]); // todavía sin tareas vinculadas
     // lucia en su cuenta ve todo: el límite es solo de lo que ve el grupo
     assert.equal((await ok(as(lucia).get(`/api/trackers/${luciaBench.id}`))).summary.best.value, 200);
   });
@@ -239,5 +240,37 @@ describe('tableros compartidos', () => {
     assert.ok((await as(lucia).post(`/api/groups/${group.id}/shares`, { boardId: board.id })).body.fields.boardId);
     assert.ok((await as(joaco).post(`/api/groups/${group.id}/shares`, { boardId: board.id })).body.fields.boardId);
     assert.equal((await as(joaco).post(`/api/groups/${group.id}/shares/${share.id}/join`)).status, 400); // es suyo
+  });
+});
+
+describe('actividad en el ranking', () => {
+  it('cuenta solo la cantidad de tareas hechas, con el límite semanal y sin títulos', async () => {
+    const group = await friendsGroup({ weeklyLimit: 2 });
+    const { bench, share } = await sharedGym(group);
+    await ok(as(lucia).post(`/api/groups/${group.id}/shares/${share.id}/join`), 201);
+    const luciaBench = await copyOf(lucia, bench.id);
+
+    const doneTask = async (user, trackerId, date, title) => {
+      const t = await ok(as(user).post('/api/tasks', { title, startDate: date, trackerId }), 201);
+      await ok(as(user).patch(`/api/tasks/${t.id}`, { done: true }));
+    };
+    await doneTask(joaco, bench.id, '2026-10-05', 'Pecho secreto');
+    for (const d of ['2026-10-05', '2026-10-06', '2026-10-07']) await doneTask(lucia, luciaBench.id, d, 'Rutina'); // 3 en la semana: cuentan 2
+    await doneTask(lucia, luciaBench.id, '2026-10-12', 'Rutina');
+
+    const ranking = await ok(as(tomi).get(`/api/groups/${group.id}/shares/${share.id}/ranking`));
+    const rows = ranking.trackers.find(t => t.name === 'Press banca').rows;
+    assert.deepEqual(rows.map(r => [r.user.username, r.activity]), [['joaco', 1], ['lucia', 3]]);
+    assert.ok(!JSON.stringify(ranking).includes('Pecho secreto'));
+    assert.ok(!JSON.stringify(ranking).includes('2026-10-0'));
+  });
+
+  it('las copias reciben el tipo del original', async () => {
+    const group = await friendsGroup();
+    const board = await ok(as(joaco).post('/api/boards', { name: 'Facu' }), 201);
+    const source = await ok(as(joaco).post('/api/trackers', { name: 'Estudio', kind: 'actividad', boardId: board.id }), 201);
+    const share = (await ok(as(joaco).post(`/api/groups/${group.id}/shares`, { boardId: board.id }), 201)).shares[0];
+    await ok(as(lucia).post(`/api/groups/${group.id}/shares/${share.id}/join`), 201);
+    assert.equal((await copyOf(lucia, source.id)).kind, 'actividad');
   });
 });

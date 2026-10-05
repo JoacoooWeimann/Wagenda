@@ -107,6 +107,8 @@ model Task {
   done        Boolean  @default(false)
   priority    Priority @default(normal)
   kind        TaskKind @default(tarea)
+  // Solo la completa el sistema en las tareas de un objetivo (su tipo, ej.
+  // "Académico"). Para clasificar sus tareas, el usuario elige un seguimiento.
   category    String?
   createdAt   DateTime @default(now())
 
@@ -118,7 +120,13 @@ model Task {
   goalWeek   GoalWeek? @relation(fields: [goalWeekId], references: [id], onDelete: Cascade)
   goalWeekId Int?
 
+  // Seguimiento al que suma actividad (opcional). SetNull: borrar el
+  // seguimiento no borra las tareas.
+  tracker   Tracker? @relation(fields: [trackerId], references: [id], onDelete: SetNull)
+  trackerId Int?
+
   @@index([goalWeekId])
+  @@index([trackerId])
   // Cubre la consulta del mes (userId = ? AND startDate < ? ORDER BY startDate)
   // y, por empezar con userId, también las búsquedas por la foreign key
   @@index([userId, startDate])
@@ -149,6 +157,13 @@ model Board {
   @@index([sourceBoardId])
 }
 
+// medicion: valores con fecha (press banca en kg, rating) · actividad: cuenta
+// las tareas hechas vinculadas (ej. "Facultad"). Los dos aceptan tareas.
+enum TrackerKind {
+  medicion
+  actividad
+}
+
 // Algo que se mide en el tiempo, sin fecha límite (ej. "Press banca" en kg,
 // "Rating Premier" en pts). Un objetivo mide constancia (sesiones y cuotas);
 // un seguimiento mide rendimiento. Es lo que más adelante se comparte en grupos.
@@ -156,6 +171,7 @@ model Tracker {
   id             Int       @id @default(autoincrement())
   name           String
   unit           String?
+  kind           TrackerKind @default(medicion)
   higherIsBetter Boolean   @default(true) // en "5 km" (minutos), menos es mejor
   createdAt      DateTime  @default(now())
 
@@ -163,6 +179,7 @@ model Tracker {
   userId  Int
   entries TrackerEntry[]
   goals   Goal[]
+  tasks   Task[] // tareas vinculadas: su cantidad hecha es la "actividad"
 
   // Tablero opcional (uno solo). SetNull: borrar un tablero no borra sus
   // seguimientos ni sus registros; pasan a "Sin tablero".

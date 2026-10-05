@@ -3,7 +3,7 @@ import { invalid, notFound } from '../utiles/responses.js';
 import { hasErrors, parseId } from '../utiles/validation/common.js';
 import { validateTrackerCreate, validateTrackerUpdate, validateEntry } from '../utiles/validation/trackers.js';
 import { currentUserId } from '../utiles/currentUser.js';
-import { trackerSummary } from '../utiles/trackers.js';
+import { trackerSummary, activityByTracker } from '../utiles/trackers.js';
 import { syncTrackerAdded, syncTrackerUpdated, detachTrackerCopies } from '../utiles/groups/sharing.js';
 
 const TRACKER_NOT_FOUND = 'Seguimiento no encontrado';
@@ -22,7 +22,18 @@ async function boardError(boardId, userId) {
   return board.sourceBoardId ? { boardId: COPY_READ_ONLY } : null;
 }
 
-const withSummary = (tracker) => ({ ...tracker, summary: trackerSummary(tracker.entries, tracker.higherIsBetter) });
+const withSummary = (tracker, activity = []) => ({
+  ...tracker,
+  summary: trackerSummary(tracker.entries, tracker.higherIsBetter),
+  activity
+});
+
+// Seguimientos con su resumen y su actividad (tareas hechas por día)
+async function withDetails(trackers) {
+  const activity = await activityByTracker(prisma, trackers.map(t => t.id));
+  return trackers.map(t => withSummary(t, activity.get(t.id)));
+}
+const withDetail = async (tracker) => (await withDetails([tracker]))[0];
 
 // Seguimiento del usuario a partir del id de la URL, o null (respuesta ya enviada)
 async function findTracker(req, res, include) {
@@ -36,18 +47,29 @@ async function findTracker(req, res, include) {
   return tracker;
 }
 
+// Opciones para elegir un seguimiento (formulario de tareas, objetivos): solo
+// lo necesario, sin registros. Trae el tablero para agruparlas.
+export async function trackerOptions(req, res) {
+  const trackers = await prisma.tracker.findMany({
+    where: { userId: currentUserId(req) },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true, kind: true, unit: true, board: { select: { id: true, name: true } } }
+  });
+  res.json(trackers);
+}
+
 export async function listTrackers(req, res) {
   const trackers = await prisma.tracker.findMany({
     where: { userId: currentUserId(req) },
     orderBy: { name: 'asc' },
     include: WITH_ENTRIES
   });
-  res.json(trackers.map(withSummary));
+  res.json(await withDetails(trackers));
 }
 
 export async function getTracker(req, res) {
   const tracker = await findTracker(req, res, WITH_ENTRIES);
-  if (tracker) res.json(withSummary(tracker));
+  if (tracker) res.json(await withDetail(tracker));
 }
 
 export async function createTracker(req, res) {
@@ -64,7 +86,7 @@ export async function createTracker(req, res) {
     await syncTrackerAdded(tx, created);
     return created;
   });
-  res.status(201).json(withSummary(tracker));
+  res.status(201).json(withSummary(tracker)); // recién creado: sin actividad
 }
 
 export async function updateTracker(req, res) {
@@ -84,7 +106,7 @@ export async function updateTracker(req, res) {
     await syncTrackerUpdated(tx, tracker, after);
     return after;
   });
-  res.json(withSummary(updated));
+  res.json(await withDetail(updated));
 }
 
 // Cascade: borra sus registros. Los objetivos vinculados quedan sin seguimiento

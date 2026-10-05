@@ -20,6 +20,7 @@ const linkedCopy = (tx, userId, boardId) =>
 
 const trackerCopyData = (tracker, userId, boardId) => ({
   name: tracker.name,
+  kind: tracker.kind,
   unit: tracker.unit,
   higherIsBetter: tracker.higherIsBetter,
   userId,
@@ -115,6 +116,6 @@ export async function syncTrackerUpdated(tx, before, after) {
   }
   await tx.tracker.updateMany({
     where: { sourceTrackerId: after.id },
-    data: { name: after.name, unit: after.unit, higherIsBetter: after.higherIsBetter }
+    data: { name: after.name, kind: after.kind, unit: after.unit, higherIsBetter: after.higherIsBetter }
   });
 }

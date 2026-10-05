@@ -82,3 +82,14 @@ describe('validateBoardCreate / validateBoardUpdate', () => {
     assert.ok(validateBoardUpdate({}).error);
   });
 });
+
+describe('cappedActivityTotal', () => {
+  it('suma por semana (lunes a domingo) con el tope del grupo', async () => {
+    const { cappedActivityTotal } = await import('../../src/utiles/trackers.js');
+    const at = (k, count) => ({ date: new Date(`${k}T00:00:00Z`), count });
+    const activity = [at('2026-10-05', 2), at('2026-10-11', 2), at('2026-10-12', 1)]; // semana 1: 4, semana 2: 1
+    assert.equal(cappedActivityTotal(activity, null), 5);
+    assert.equal(cappedActivityTotal(activity, 3), 4);
+    assert.equal(cappedActivityTotal([], 3), 0);
+  });
+});
