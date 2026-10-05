@@ -6,8 +6,15 @@ export { freeSlots, minutesToTime, timeToMinutes, overlaps, MARGIN_MINUTES } fro
 export const WEEKDAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 export const WEEKDAYS_SHORT = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
-// Rango visible de la grilla (6:00 a 24:00)
+// Rango visible de la grilla por defecto (6:00 a 24:00)
 export const GRID = { startMinute: 6 * 60, endMinute: 24 * 60 };
+
+// Rango de la grilla para una semana: desde la hora en punto más temprana que
+// se use (una franja o un bloque de madrugada) o las 6, hasta las 24
+export function weekGrid(windows, routine) {
+  const earliest = Math.min(GRID.startMinute, ...windows.map(w => w.startMinute), ...routine.map(b => b.startMinute));
+  return { startMinute: Math.floor(earliest / 60) * 60, endMinute: GRID.endMinute };
+}
 
 // Posición vertical de un bloque en una grilla, en porcentaje: lo que queda
 // fuera del rango se recorta

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getWeek, putWindow, createRoutine, updateRoutine, deleteRoutine, getTrackerOptions } from '../../utiles/api.js';
-import { WEEKDAYS, GRID, gridPosition, gridHours, minutesToTime, timeToMinutes, timeRange, freeSlots, durationText } from '../../utiles/week.js';
+import { WEEKDAYS, weekGrid, gridPosition, gridHours, minutesToTime, timeToMinutes, timeRange, freeSlots, durationText } from '../../utiles/week.js';
 import { categoryColor } from '../../utiles/tasks.js';
 import { ErrorBanner } from '../common.jsx';
 import RoutineForm from './RoutineForm.jsx';
@@ -46,6 +46,11 @@ export default function WeekPage() {
   if (!week) return <div className="goals-container"><ErrorBanner message={error} onClose={() => setError(null)} /><p className="goals-empty">Cargando…</p></div>;
 
   const blocksOf = (weekday) => week.routine.filter(b => b.weekday === weekday);
+  // La grilla arranca a la hora más temprana que uses (madrugada incluida); 40 px por hora
+  const grid = weekGrid(week.windows, week.routine);
+  const hours = gridHours(grid);
+  const bodyHeight = { height: `${hours.length * 40}px` };
+  const at = (minute) => `${gridPosition({ startMinute: minute, endMinute: minute }, grid).top}%`;
   const freeOf = (weekday) => freeSlots(week.windows[weekday], blocksOf(weekday)).reduce((n, s) => n + s.endMinute - s.startMinute, 0);
 
   return (
@@ -82,24 +87,26 @@ export default function WeekPage() {
 
       <section className="goals-card week-grid-card">
         <div className="week-grid">
-          <div className="week-hours" aria-hidden="true">
-            {gridHours().map(h => <span key={h} style={{ top: `${gridPosition({ startMinute: h * 60, endMinute: h * 60 }).top}%` }}>{h}:00</span>)}
+          <div className="week-hours" aria-hidden="true" style={bodyHeight}>
+            {hours.map(h => <span key={h} style={{ top: at(h * 60) }}>{h}:00</span>)}
           </div>
           {WEEKDAYS.map((name, weekday) => {
             const window = week.windows[weekday];
-            const win = gridPosition(window);
+            const win = gridPosition(window, grid);
             return (
               <div key={name} className={`week-day${day === weekday ? ' is-selected' : ''}`}>
                 <div className="week-day-header">
-                  <strong>{name}</strong>
+                  <div className="week-day-title">
+                    <strong>{name}</strong>
+                    <span className="week-free">{durationText(freeOf(weekday))} libres</span>
+                  </div>
                   <WindowEditor window={window} onSave={(s, e) => saveWindow(weekday, s, e)} />
-                  <span className="week-free">{durationText(freeOf(weekday))} libres</span>
                 </div>
-                <div className="week-day-body" onClick={(e) => { if (e.target === e.currentTarget) setEditing({ weekday }); }}>
-                  {gridHours().map(h => <div key={h} className="week-hour-line" style={{ top: `${gridPosition({ startMinute: h * 60, endMinute: h * 60 }).top}%` }} />)}
+                <div className="week-day-body" style={bodyHeight} onClick={(e) => { if (e.target === e.currentTarget) setEditing({ weekday }); }}>
+                  {hours.map(h => <div key={h} className="week-hour-line" style={{ top: at(h * 60) }} />)}
                   <div className="week-window" style={{ top: `${win.top}%`, height: `${win.height}%` }} />
                   {blocksOf(weekday).map(block => {
-                    const pos = gridPosition(block);
+                    const pos = gridPosition(block, grid);
                     const color = categoryColor(block.tracker?.name ?? block.title);
                     return (
                       <button key={block.id} type="button" className={`week-block task-tag-${color}`}

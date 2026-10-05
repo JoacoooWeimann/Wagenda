@@ -62,7 +62,7 @@ export default function DayPanel({ date, tasks, sessionGoals, trackers, agenda, 
       <ErrorBanner message={error} onClose={() => setError(null)} />
 
       {dayAgenda && (
-        <DayAgenda agenda={dayAgenda} onToggle={toggleDone} onEdit={startEdit}
+        <DayAgenda agenda={dayAgenda} onToggle={toggleDone} onEdit={startEdit} onRemove={removeTask}
           onAddAt={(times) => { setEditingTask(null); setAdding({ times }); }} />
       )}
       {dayAgenda && <h4 className="day-section-title">Sin horario</h4>}

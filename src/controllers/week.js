@@ -5,7 +5,7 @@ import {
   validateWindow, validateRoutineCreate, validateRoutineUpdate, checkTimeOrder, isWeekday
 } from '../utiles/validation/week.js';
 import { currentUserId } from '../utiles/currentUser.js';
-import { overlaps } from '../utiles/schedule/slots.js';
+import { overlaps, splitOvernight } from '../utiles/schedule/slots.js';
 import { loadWeek } from '../utiles/schedule/agenda.js';
 
 // "Mi semana": la franja activa de cada día y la rutina fija (trabajo,
@@ -53,7 +53,8 @@ async function clash(userId, block, exceptId) {
 const DAY_NAMES = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 const clashMessage = (other) => `Se superpone con «${other.title}» del ${DAY_NAMES[other.weekday]}`;
 
-// Crea el bloque en cada día elegido; si alguno choca, no se crea ninguno
+// Crea el bloque en cada día elegido; si alguno choca, no se crea ninguno.
+// Uno que cruza la medianoche se guarda como dos tramos (splitOvernight).
 export async function createRoutine(req, res) {
   const { data, fields } = validateRoutineCreate(req.body);
   if (hasErrors(fields)) return invalid(res, fields);
@@ -62,14 +63,16 @@ export async function createRoutine(req, res) {
   const badTracker = await trackerError(data.trackerId, userId);
   if (badTracker) return invalid(res, badTracker);
 
-  const { weekdays, ...block } = data;
-  for (const weekday of weekdays) {
-    const other = await clash(userId, { ...block, weekday });
-    if (other) return invalid(res, { startMinute: clashMessage(other) });
+  const { weekdays, startMinute, endMinute, ...rest } = data;
+  const segments = weekdays.flatMap(weekday => splitOvernight({ weekday, startMinute, endMinute }));
+  for (const [i, segment] of segments.entries()) {
+    const other = (await clash(userId, segment))
+      ?? segments.slice(0, i).find(s => s.weekday === segment.weekday && overlaps(s, segment)); // entre los nuevos
+    if (other) return invalid(res, { startMinute: other.title ? clashMessage(other) : 'Los días elegidos se superponen entre sí' });
   }
 
-  await prisma.$transaction(weekdays.map(weekday =>
-    prisma.routineBlock.create({ data: { ...block, weekday, userId } })
+  await prisma.$transaction(segments.map(segment =>
+    prisma.routineBlock.create({ data: { ...rest, ...segment, userId } })
   ));
   res.status(201).json(await loadWeek(userId));
 }

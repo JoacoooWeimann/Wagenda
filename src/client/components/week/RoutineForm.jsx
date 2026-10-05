@@ -29,7 +29,9 @@ export default function RoutineForm({ block, trackers, initialWeekday = 0, onSav
   async function handleSubmit(e) {
     e.preventDefault();
     setBusy(true);
-    const times = { startMinute: timeToMinutes(form.start), endMinute: timeToMinutes(form.end) };
+    // "hasta 00:00" = hasta la medianoche
+    const end = timeToMinutes(form.end);
+    const times = { startMinute: timeToMinutes(form.start), endMinute: end === 0 ? 1440 : end };
     const trackerId = form.trackerId === '' ? null : Number(form.trackerId);
     const payload = block
       ? { title: form.title, weekday: form.weekdays[0], ...times, trackerId }
@@ -78,6 +80,12 @@ export default function RoutineForm({ block, trackers, initialWeekday = 0, onSav
           <input type="time" className={invalid('endMinute')} value={form.end} onChange={(e) => updateField('end', e.target.value)} />
         </label>
       </div>
+      {!block && form.end && form.start && form.end !== '00:00' && form.end < form.start && (
+        <p className="goal-meta">
+          <i className="bi bi-moon-stars" aria-hidden="true" /> Termina al día siguiente: se guarda en dos tramos,
+          hasta las 24:00 y desde las 00:00 del día que sigue.
+        </p>
+      )}
       <FieldError message={fieldErrors.startMinute || fieldErrors.endMinute} />
 
       <div className="goal-actions">

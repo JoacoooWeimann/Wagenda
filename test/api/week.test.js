@@ -51,6 +51,18 @@ describe('Mi semana', () => {
     await ok(ctx.request('POST', '/api/routine', { title: 'Gym', weekdays: [0], startMinute: h(17), endMinute: h(18) }), 201);
   });
 
+  it('un bloque que cruza la medianoche se guarda como dos tramos', async () => {
+    const week = await ok(ctx.request('POST', '/api/routine', { title: 'Noche', weekdays: [4, 6], startMinute: h(22), endMinute: h(6) }), 201);
+    assert.deepEqual(week.routine.map(b => [b.weekday, b.startMinute, b.endMinute]), [
+      [0, 0, h(6)],          // el del domingo sigue el lunes
+      [4, h(22), 1440], [5, 0, h(6)],
+      [6, h(22), 1440]
+    ]);
+    // el tramo de la madrugada también choca con lo que ya está
+    const res = await ctx.request('POST', '/api/routine', { title: 'Gym', weekdays: [5], startMinute: h(5), endMinute: h(7) });
+    assert.match(res.body.fields.startMinute, /Noche.*sábado/);
+  });
+
   it('se edita (controlando orden y choques) y se borra', async () => {
     const week = await ok(ctx.request('POST', '/api/routine', work({ weekdays: [0] })), 201);
     const [block] = week.routine;

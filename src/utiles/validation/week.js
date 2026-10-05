@@ -11,14 +11,20 @@ export const isWeekday = (v) => Number.isInteger(v) && v >= 0 && v <= 6;
 
 // Inicio y fin presentes en `body` (o requeridos). No valida el orden si falta
 // alguno: en un PATCH lo controla el controller combinando con lo guardado.
-function timeRange(body, fields, data, { partial }) {
+function timeRange(body, fields, data, { partial, overnight = false }) {
   for (const key of ['startMinute', 'endMinute']) {
     if (body[key] === undefined) {
       if (!partial) fields[key] = 'Horario obligatorio';
     } else if (isMinute(body[key])) data[key] = body[key];
     else fields[key] = 'Horario inválido';
   }
-  if (data.startMinute !== undefined && data.endMinute !== undefined) checkTimeOrder(data, fields);
+  if (data.startMinute === undefined || data.endMinute === undefined) return;
+  // Cruzando la medianoche, solo inicio y fin iguales no tienen sentido
+  if (overnight) {
+    if (data.startMinute === data.endMinute) fields.endMinute = 'El fin tiene que ser distinto del inicio';
+  } else {
+    checkTimeOrder(data, fields);
+  }
 }
 
 export function checkTimeOrder({ startMinute, endMinute }, fields) {
@@ -34,7 +40,8 @@ export function validateWindow(body = {}) {
 }
 
 // Bloque de rutina. Al crear se pueden elegir varios días a la vez
-// ("Trabajo, lunes a viernes"): `weekdays`.
+// ("Trabajo, lunes a viernes"): `weekdays`. El fin puede ser anterior al
+// inicio: cruza la medianoche (lo divide el controller con splitOvernight).
 export function validateRoutineCreate(body = {}) {
   const fields = {};
   const data = {};
@@ -46,7 +53,7 @@ export function validateRoutineCreate(body = {}) {
   if (days.length === 0 || !days.every(isWeekday)) fields.weekdays = 'Elegí al menos un día';
   else data.weekdays = days.sort();
 
-  timeRange(body, fields, data, { partial: false });
+  timeRange(body, fields, data, { partial: false, overnight: true });
   trackerField(body, fields, data);
   return { data, fields };
 }

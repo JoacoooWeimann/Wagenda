@@ -191,101 +191,60 @@
   .day-preview { transition: none; transform: none; }
 }
 
-/* --- Agenda del día: línea de tiempo ------------------------------------- */
-.agenda {
-  position: relative;
-  margin: 4px 0 16px;
-  padding-left: 48px;          /* columna de horas */
-}
-.agenda-hour {
-  position: absolute;
-  left: 0;
-  right: 0;
-  border-top: 1px dashed var(--wg-border);
-  pointer-events: none;
-}
-.agenda-hour span {
-  position: absolute;
-  left: 0;
-  transform: translateY(-50%);
-  padding-right: 6px;
-  background: var(--wg-surface);
-  font-size: 0.7rem;
-  color: var(--wg-text-subtle);
+/* --- Agenda del día: lista cronológica compacta ----------------------------- */
+.agenda-list { margin-bottom: 8px; }
+
+/* Hora a la izquierda (rutina y tareas), alineada en columna */
+.agenda-time {
+  flex-shrink: 0;
+  width: 42px;
+  padding-top: 3px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--wg-text-muted);
   font-variant-numeric: tabular-nums;
 }
-.agenda-lane { position: absolute; top: 0; bottom: 0; left: 48px; right: 0; }
 
-/* Hueco libre: casi invisible; se ilumina para agregar ahí */
-.agenda-free {
-  position: absolute;
-  left: 2px;
-  right: 2px;
+/* Rutina: una fila tenue con el color de su seguimiento, sin check */
+.agenda-routine-row {
   display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 4px 8px;
-  border: 1px dashed transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: transparent;
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 12px 8px 14px;
+  border-radius: 12px;
+  border-left: 4px solid color-mix(in srgb, var(--tag) 70%, transparent);
+  background: color-mix(in srgb, var(--tag) 9%, transparent);
+  font-size: 0.9rem;
 }
-.agenda-free:hover,
-.agenda-free:focus-visible {
-  border-color: var(--wg-primary);
-  background: var(--wg-primary-soft);
-  color: var(--wg-primary);
-}
+.agenda-routine-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.agenda-routine-title small { color: var(--wg-text-muted); }
+.agenda-until { flex-shrink: 0; font-size: 0.78rem; color: var(--wg-text-muted); }
 
-/* Rutina: de fondo, con el color de su seguimiento */
-.agenda-routine {
-  position: absolute;
-  padding: 4px 8px;
-  overflow: hidden;
-  font-size: 0.75rem;
-  color: var(--wg-text-muted);
-  background: color-mix(in srgb, var(--tag) 12%, transparent);
-  border-left: 3px solid color-mix(in srgb, var(--tag) 60%, transparent);
-  border-radius: 6px;
-}
-.agenda-routine strong { color: var(--wg-text); }
-
-/* Tarea con horario: mini-card compacta */
-.agenda-task {
-  position: absolute;
+/* Tiempo libre: una línea fina con un + para agregar a esa hora */
+.agenda-free-row button {
+  width: 100%;
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 4px 8px;
-  overflow: hidden;
-  background: var(--wg-surface-2);
-  border: 1px solid var(--wg-border);
-  border-left: 4px solid var(--task-priority, var(--wg-primary));
-  border-radius: 8px;
-  z-index: 1;
-}
-.agenda-task.is-done { opacity: 0.55; }
-.agenda-task.is-done strong { text-decoration: line-through; }
-.agenda-task .task-check { width: 20px; height: 20px; font-size: 0.75rem; }
-.agenda-task-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 14px 2px 18px;
   border: none;
   background: none;
-  color: var(--wg-text);
-  text-align: left;
-  font-size: 0.8rem;
+  color: var(--wg-text-subtle);
+  font-size: 0.78rem;
   cursor: pointer;
 }
-.agenda-task-body strong { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.agenda-task-body span { max-width: 100%; color: var(--wg-text-muted); font-size: 0.72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agenda-free-row button > span:first-child { width: 42px; text-align: left; font-variant-numeric: tabular-nums; }
+.agenda-free-line {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.agenda-free-line::before,
+.agenda-free-line::after { content: ''; flex: 1; border-top: 1px dashed var(--wg-border-strong); }
+.agenda-free-row button:hover { color: var(--wg-primary); }
+.agenda-free-row button:hover .agenda-free-line::before,
+.agenda-free-row button:hover .agenda-free-line::after { border-color: var(--wg-primary); }
 
 .day-section-title {
   margin: 8px 0;

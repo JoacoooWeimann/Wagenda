@@ -55,7 +55,7 @@ describe('validación de Mi semana', () => {
     const { data, fields } = validateRoutineCreate({ title: ' Trabajo ', weekdays: [4, 0, 1, 0], ...iv(540, 1020), trackerId: 3 });
     assert.deepEqual(fields, {});
     assert.deepEqual(data, { title: 'Trabajo', weekdays: [0, 1, 4], ...iv(540, 1020), trackerId: 3 });
-    const bad = validateRoutineCreate({ title: '', weekdays: [7], ...iv(600, 500) });
+    const bad = validateRoutineCreate({ title: '', weekdays: [7], ...iv(600, 600) });
     assert.deepEqual(Object.keys(bad.fields).sort(), ['endMinute', 'title', 'weekdays']);
   });
 
@@ -63,5 +63,21 @@ describe('validación de Mi semana', () => {
     assert.deepEqual(validateRoutineUpdate({ endMinute: 600 }).data, { endMinute: 600 });
     assert.ok(validateRoutineUpdate({ weekday: 9 }).fields.weekday);
     assert.ok(validateRoutineUpdate({}).error);
+  });
+});
+
+describe('bloques que cruzan la medianoche', () => {
+  it('splitOvernight: dos tramos, uno en cada día (el domingo sigue en el lunes)', async () => {
+    const { splitOvernight } = await import('../../src/utiles/schedule/slots.js');
+    assert.deepEqual(splitOvernight({ weekday: 4, startMinute: h(22), endMinute: h(6) }),
+      [{ weekday: 4, startMinute: h(22), endMinute: 1440 }, { weekday: 5, startMinute: 0, endMinute: h(6) }]);
+    assert.deepEqual(splitOvernight({ weekday: 6, startMinute: h(23), endMinute: h(1) })[1].weekday, 0);
+    assert.deepEqual(splitOvernight({ weekday: 0, startMinute: h(20), endMinute: 0 }), [{ weekday: 0, startMinute: h(20), endMinute: 1440 }]);
+    assert.deepEqual(splitOvernight({ weekday: 0, startMinute: h(9), endMinute: h(17) }), [{ weekday: 0, startMinute: h(9), endMinute: h(17) }]);
+  });
+
+  it('la validación del bloque acepta un fin anterior al inicio, pero no igual', () => {
+    assert.deepEqual(validateRoutineCreate({ title: 'Noche', weekdays: [4], startMinute: h(22), endMinute: h(6) }).fields, {});
+    assert.ok(validateRoutineCreate({ title: 'x', weekdays: [4], startMinute: h(6), endMinute: h(6) }).fields.endMinute);
   });
 });

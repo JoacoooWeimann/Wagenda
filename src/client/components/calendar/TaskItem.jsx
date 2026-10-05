@@ -8,7 +8,8 @@ import { ETIQUETA_PRIORIDAD } from './constants.js';
 // redondo, categoría como etiqueta de color y chips con el objetivo, el rango de
 // fechas o el tipo (sesión, fecha límite). Click en el contenido = editar.
 // Las tareas de un objetivo cerrado son historial: no se marcan, editan ni borran.
-export default function TaskItem({ task, onToggle, onEdit, onRemove }) {
+// `time` (en la agenda del día): la hora va a la izquierda, en vez de en un chip.
+export default function TaskItem({ task, time, onToggle, onEdit, onRemove }) {
   const [confirming, setConfirming] = useState(false);
   const goalWeek = task.goalWeek;
   const readOnly = goalWeek && goalWeek.goal.status !== 'activo';
@@ -19,6 +20,7 @@ export default function TaskItem({ task, onToggle, onEdit, onRemove }) {
 
   return (
     <li className={classes.join(' ')}>
+      {time && <span className="agenda-time">{time}</span>}
       <button
         type="button" role="checkbox" aria-checked={task.done} disabled={readOnly}
         className="task-check" onClick={() => onToggle(task)} aria-label={`Marcar ${task.title}`}
@@ -45,7 +47,7 @@ export default function TaskItem({ task, onToggle, onEdit, onRemove }) {
         {task.description && <p className="task-description">{task.description}</p>}
 
         <div className="task-chips">
-          {task.startMinute !== null && task.startMinute !== undefined && (
+          {!time && task.startMinute !== null && task.startMinute !== undefined && (
             <span className="task-chip task-chip-time">
               <i className="bi bi-clock" aria-hidden="true" /> {minutesToTime(task.startMinute)}–{minutesToTime(task.endMinute)}
             </span>

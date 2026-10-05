@@ -56,3 +56,16 @@ export function timeToMinutes(value) {
 
 // Día de la semana (0 = lunes … 6 = domingo) de una fecha UTC a medianoche
 export const weekdayOf = (date) => (date.getUTCDay() + 6) % 7;
+
+// Un bloque que cruza la medianoche ("hasta" antes que "desde": trabajo de
+// 22:00 a 06:00) se guarda como dos tramos, uno en cada día: vie 22:00–24:00 y
+// sáb 00:00–06:00. Así todo lo demás (agenda, huecos, planificador) sigue
+// trabajando con intervalos de un solo día. Fin 00:00 = hasta la medianoche.
+export function splitOvernight({ weekday, startMinute, endMinute }) {
+  const end = endMinute === 0 ? DAY_MINUTES : endMinute;
+  if (end > startMinute) return [{ weekday, startMinute, endMinute: end }];
+  return [
+    { weekday, startMinute, endMinute: DAY_MINUTES },
+    { weekday: (weekday + 1) % 7, startMinute: 0, endMinute: end }
+  ];
+}

@@ -14,7 +14,7 @@
   gap: 6px;
 }
 
-.week-hours { position: relative; margin-top: 76px; height: 720px; }
+.week-hours { position: relative; margin-top: 98px; }
 .week-hours span {
   position: absolute;
   right: 4px;
@@ -25,13 +25,14 @@
 
 .week-day { min-width: 0; display: flex; flex-direction: column; }
 .week-day-header {
-  height: 70px;
+  height: 92px;               /* fijo: la columna de horas se alinea con este alto */
   margin-bottom: 6px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   font-size: 0.8rem;
 }
+.week-day-title { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px; }
 .week-free { color: var(--wg-text-subtle); font-size: 0.72rem; }
 
 .week-window-editor { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
@@ -45,7 +46,6 @@
 
 .week-day-body {
   position: relative;
-  height: 720px;              /* 18 h * 40 px */
   background: var(--wg-bg);
   border: 1px solid var(--wg-border);
   border-radius: 10px;
