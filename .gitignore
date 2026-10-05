@@ -8,3 +8,6 @@ src/public/build/
 prisma/test-*.db*
 # Base sombra que usa `prisma migrate diff`
 shadow.db*
+
+# Backups de la base (desarrollo)
+prisma/backups/

@@ -57,3 +57,11 @@ export function sessionCookieOptions() {
     maxAge: SESSION_DAYS * DAY_MS
   };
 }
+
+// Borra las sesiones vencidas de todos los usuarios. Al iniciar sesión ya se
+// limpian las del usuario, pero las de quien no vuelve quedarían para siempre:
+// esto corre periódicamente (ver jobs.js). Devuelve cuántas borró.
+export async function cleanupExpiredSessions(now = new Date()) {
+  const { count } = await prisma.session.deleteMany({ where: { expiresAt: { lt: now } } });
+  return count;
+}

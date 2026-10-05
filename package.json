@@ -16,7 +16,8 @@
     "test": "node --test \"test/**/*.test.js\"",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"src/**\" \"test/**/*.test.js\"",
     "build:prod": "prisma generate && vite build",
-    "start:prod": "prisma migrate deploy && node src/index.js"
+    "start:prod": "prisma migrate deploy && node src/index.js",
+    "backup": "node scripts/backup.js"
   },
   "nodemonConfig": {
     "ignore": [
