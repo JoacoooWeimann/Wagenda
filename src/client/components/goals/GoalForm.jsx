@@ -12,10 +12,14 @@ const initialForm = () => ({
   strategy: 'divisible',
   startDate: todayKey(),
   deadline: '',
-  contents: [{ name: 'Unidad', count: '' }],
+  contents: [{ name: 'Unidad', count: '', minutes: '' }],
   reviewWeek: true,
   sessionsPerWeek: '3',
-  itemId: ''
+  itemId: '',
+  // Planificar en el tiempo libre (ver "Mi semana")
+  scheduled: true,
+  sessionMinutes: '60',
+  timePreference: 'cualquiera'
 });
 
 export default function GoalForm({ trackers = [], onCreated, onCancel }) {
@@ -48,7 +52,7 @@ export default function GoalForm({ trackers = [], onCreated, onCancel }) {
   function updateContent(index, field, value) {
     updateField('contents', form.contents.map((c, i) => (i === index ? { ...c, [field]: value } : c)));
   }
-  const addContent = () => updateField('contents', [...form.contents, { name: '', count: '' }]);
+  const addContent = () => updateField('contents', [...form.contents, { name: '', count: '', minutes: '' }]);
   const removeContent = (index) => updateField('contents', form.contents.filter((_, i) => i !== index));
 
   function showError(err) {
@@ -144,6 +148,11 @@ export default function GoalForm({ trackers = [], onCreated, onCancel }) {
                   <input type="text" maxLength={30} placeholder="Nombre (ej. Unidad, TP)" aria-label={`Nombre del contenido ${i + 1}`}
                     className={invalid('contents')} value={content.name}
                     onChange={(e) => updateContent(i, 'name', e.target.value)} />
+                  {form.scheduled && (
+                    <input type="number" min={15} max={1200} step={15} placeholder="min c/u" className={`goal-content-minutes ${invalid('contents')}`}
+                      aria-label={`Minutos que lleva cada ${content.name || 'contenido'}`} title="Cuánto te lleva cada uno, en minutos"
+                      value={content.minutes} onChange={(e) => updateContent(i, 'minutes', e.target.value)} />
+                  )}
                   {form.contents.length > 1 && (
                     <button type="button" className="goal-task-remove" onClick={() => removeContent(i)} aria-label={`Quitar contenido ${i + 1}`}>✕</button>
                   )}
@@ -171,6 +180,30 @@ export default function GoalForm({ trackers = [], onCreated, onCancel }) {
           </div>
         )}
 
+        <fieldset className="goal-schedule">
+          <label className="goal-checkbox">
+            <input type="checkbox" checked={form.scheduled} onChange={(e) => updateField('scheduled', e.target.checked)} />
+            Ubicar las sesiones en mi tiempo libre (según <a href="/week">Mi semana</a>)
+          </label>
+          {form.scheduled && (
+            <div className="goal-form-row">
+              <label>{form.strategy === 'fases' ? 'Cada sesión dura' : 'Sentadas de hasta'} (min)
+                <input type="number" min={15} max={240} step={15} className={invalid('sessionMinutes')} value={form.sessionMinutes}
+                  onChange={(e) => updateField('sessionMinutes', e.target.value)} />
+                <FieldError message={fieldErrors.sessionMinutes} />
+              </label>
+              <label>Prefiero
+                <select value={form.timePreference} onChange={(e) => updateField('timePreference', e.target.value)}>
+                  <option value="cualquiera">Cualquier horario</option>
+                  <option value="manana">A la mañana (6 a 12)</option>
+                  <option value="tarde">A la tarde (12 a 19)</option>
+                  <option value="noche">A la noche (19 a 24)</option>
+                </select>
+              </label>
+            </div>
+          )}
+        </fieldset>
+
         <div className="calendar-field">
           <textarea placeholder="Descripción (opcional)" maxLength={1000} rows={2} className={invalid('description')}
             value={form.description} onChange={(e) => updateField('description', e.target.value)} />
@@ -190,6 +223,15 @@ export default function GoalForm({ trackers = [], onCreated, onCancel }) {
           <h3>
             Vista previa · {preview.weeks.length} semanas · {totalTarget} {countNoun(form.strategy, totalTarget)} en total
           </h3>
+          {preview.warnings?.length > 0 && (
+            <div className="goal-warnings" role="status">
+              <i className="bi bi-exclamation-triangle" aria-hidden="true" />
+              <div>
+                {preview.warnings.map(w => <p key={w}>{w}</p>)}
+                <p>Quedan sin horario en su día. Podés liberar tiempo en <a href="/week">Mi semana</a> o moverlas después.</p>
+              </div>
+            </div>
+          )}
           <PlanWeeks weeks={preview.weeks} strategy={form.strategy} />
           <div className="goal-actions">
             <button type="button" className="goal-btn-primary" onClick={handleCreate} disabled={busy}>

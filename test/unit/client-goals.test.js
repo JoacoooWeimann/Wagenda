@@ -112,6 +112,13 @@ describe('helpers de objetivos (cliente)', () => {
     assert.equal('sessionsPerWeek' in divisible, false);
     assert.equal('itemId' in divisible, false);
 
+    assert.equal('sessionMinutes' in divisible, false); // sin horarios
+
+    const scheduled = buildGoalPayload({ ...form, scheduled: true, sessionMinutes: '60', timePreference: 'noche',
+      contents: [{ name: 'Unidad', count: '6', minutes: '120' }] });
+    assert.deepEqual([scheduled.sessionMinutes, scheduled.timePreference], [60, 'noche']);
+    assert.deepEqual(scheduled.contents, [{ name: 'Unidad', count: 6, minutes: 120 }]);
+
     const fases = buildGoalPayload({ ...form, strategy: 'fases' });
     assert.equal(fases.sessionsPerWeek, 3);
     assert.equal(fases.itemId, 7);

@@ -128,8 +128,18 @@ export function buildGoalPayload(form) {
     startDate: form.startDate,
     deadline: form.deadline
   };
+  // Planificar en el tiempo libre: duración de la sesión, horario preferido y,
+  // en contenido, cuánto lleva cada uno
+  if (form.scheduled) {
+    payload.sessionMinutes = toInt(form.sessionMinutes);
+    payload.timePreference = form.timePreference;
+  }
   if (form.strategy === 'divisible') {
-    payload.contents = form.contents.map(c => ({ name: c.name, count: toInt(c.count) }));
+    payload.contents = form.contents.map(c => ({
+      name: c.name,
+      count: toInt(c.count),
+      ...(form.scheduled ? { minutes: toInt(c.minutes) } : {})
+    }));
     payload.reviewWeek = form.reviewWeek;
   } else {
     payload.sessionsPerWeek = toInt(form.sessionsPerWeek);

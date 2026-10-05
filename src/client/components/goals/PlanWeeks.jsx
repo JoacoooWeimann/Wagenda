@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { dayMonth, weekSummary, countNoun } from '../../utiles/goals.js';
+import { minutesToTime } from '../../utiles/week.js';
 
 // Plan semana por semana.
 // - Vista previa (sin `today`): cada semana muestra su cuota.
@@ -52,15 +53,20 @@ export default function PlanWeeks({ weeks, strategy, today, onToggle, onDeleteSe
   );
 }
 
+// "05/10", "05/10–11/10" o, con horario, "mar 06/10 · 19:00–20:00"
+const WEEKDAY_SHORT = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 function taskDate(task) {
-  return task.startDate === task.endDate
-    ? dayMonth(task.startDate)
-    : `${dayMonth(task.startDate)}–${dayMonth(task.endDate)}`;
+  if (task.startDate !== task.endDate) return `${dayMonth(task.startDate)}–${dayMonth(task.endDate)}`;
+  if (task.startMinute === null || task.startMinute === undefined) return dayMonth(task.startDate);
+  const weekday = WEEKDAY_SHORT[new Date(task.startDate).getUTCDay()];
+  return `${weekday} ${dayMonth(task.startDate)} · ${minutesToTime(task.startMinute)}–${minutesToTime(task.endMinute)}`;
 }
 
 function TaskRow({ task, onToggle, onDeleteSession }) {
-  // Una sesión ya está hecha por definición: se borra, no se desmarca
-  if (task.kind === 'sesion') {
+  // Una sesión registrada (sin horario) ya está hecha por definición: se borra,
+  // no se desmarca. Las planificadas (con horario) se tildan como una tarea.
+  const planned = task.startMinute !== null && task.startMinute !== undefined;
+  if (task.kind === 'sesion' && !planned) {
     return (
       <li>
         <span>· {task.title}</span>

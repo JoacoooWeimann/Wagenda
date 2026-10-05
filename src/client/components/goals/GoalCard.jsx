@@ -118,7 +118,10 @@ export default function GoalCard({ goal, today, trackers, onChange, onDelete, on
   }
 
   async function saveDeadline(deadline) {
-    applyGoal(await changeDeadline(goal.id, deadline, today)); // si falla, DeadlineForm muestra el error
+    const { warnings = [], ...updated } = await changeDeadline(goal.id, deadline, today); // si falla, DeadlineForm muestra el error
+    applyGoal(updated);
+    // Con horarios, sesiones nuevas que no entraron en el tiempo libre
+    if (warnings.length > 0) onError(`${warnings.join(' · ')}. Quedaron sin horario en su día.`);
     setEditingDeadline(false);
   }
 
