@@ -16,7 +16,7 @@ const formFromTask = (task) => ({
 
 // Formulario de alta/edición. El componente padre lo monta con key = tarea en
 // edición: al cambiar de tarea, React crea uno nuevo y el estado arranca limpio.
-export default function TaskForm({ date, editingTask, onSaved, onCancelEdit, onError }) {
+export default function TaskForm({ date, editingTask, onSaved, onCancel, onError }) {
   const [form, setForm] = useState(() => (editingTask ? formFromTask(editingTask) : emptyForm(date)));
   const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -94,10 +94,12 @@ export default function TaskForm({ date, editingTask, onSaved, onCancelEdit, onE
           <FieldError message={fieldErrors.category} />
         </div>
       </div>
-      <button type="submit" disabled={saving}>
-        {saving ? 'Guardando…' : editingTask ? 'Guardar cambios' : 'Agregar'}
-      </button>
-      {editingTask && <button type="button" onClick={onCancelEdit}>Cancelar edición</button>}
+      <div className="calendar-task-form-actions">
+        <button type="submit" disabled={saving}>
+          {saving ? 'Guardando…' : editingTask ? 'Guardar cambios' : 'Agregar'}
+        </button>
+        <button type="button" className="calendar-task-form-cancel" onClick={onCancel}>Cancelar</button>
+      </div>
     </form>
   );
 }

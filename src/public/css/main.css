@@ -34,6 +34,14 @@
   --wg-danger-border: rgba(248, 113, 113, 0.4);
   --wg-muted-dot: #6B807C;      /* prioridad baja */
 
+  /* Etiquetas de categoría (categoryColor elige una por nombre) */
+  --wg-tag-0: #FBBF24;  /* ámbar */
+  --wg-tag-1: #60A5FA;  /* celeste */
+  --wg-tag-2: #C084FC;  /* violeta */
+  --wg-tag-3: #F472B6;  /* rosa */
+  --wg-tag-4: #A3E635;  /* lima */
+  --wg-tag-5: #FB923C;  /* naranja */
+
   /* Forma */
   --wg-radius: 16px;
   --wg-radius-sm: 8px;

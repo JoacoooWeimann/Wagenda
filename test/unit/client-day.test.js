@@ -66,3 +66,13 @@ describe('previews de ayer y mañana', () => {
     assert.deepEqual(daySummary([]), { items: [], more: 0, done: 0, total: 0 });
   });
 });
+
+describe('categoryColor', () => {
+  it('mismo nombre, mismo color; siempre dentro de la paleta', async () => {
+    const { categoryColor, TAG_COLORS } = await import('../../src/client/utiles/tasks.js');
+    assert.equal(categoryColor('Facultad'), categoryColor(' facultad '));
+    const colors = ['Facultad', 'Gimnasio', 'Trabajo', 'Casa', 'CS2', 'Salud', 'Compras'].map(categoryColor);
+    assert.ok(colors.every(c => Number.isInteger(c) && c >= 0 && c < TAG_COLORS));
+    assert.ok(new Set(colors).size >= 3, 'categorías distintas suelen tener colores distintos');
+  });
+});

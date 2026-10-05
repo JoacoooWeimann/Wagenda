@@ -7,12 +7,25 @@ import TaskForm from './TaskForm.jsx';
 import SessionLogger from './SessionLogger.jsx';
 
 // Contenido de un día: sus tareas (marcar, editar, borrar), registrar sesiones
-// y el formulario de alta/edición. Lo usan el modal del calendario y la card
+// y el formulario de alta/edición, que está cerrado hasta que se pide
+// ("+ Nueva tarea" o click en una tarea para editarla). Lo usan el modal del calendario y la card
 // del inicio: un solo componente para lo mismo. Se monta con key = fecha, así
 // al cambiar de día el estado (edición, errores) arranca limpio.
 export default function DayPanel({ date, tasks, sessionGoals, onTaskSaved, onTaskRemoved }) {
   const [editingTask, setEditingTask] = useState(null);
+  const [adding, setAdding] = useState(false);
   const [error, setError] = useState(null);
+  const formOpen = adding || editingTask !== null;
+
+  function closeForm() {
+    setAdding(false);
+    setEditingTask(null);
+  }
+
+  function startEdit(task) {
+    setAdding(false);
+    setEditingTask(task);
+  }
 
   async function toggleDone(task) {
     try {
@@ -34,7 +47,7 @@ export default function DayPanel({ date, tasks, sessionGoals, onTaskSaved, onTas
 
   function handleSaved(task, wasEditing) {
     onTaskSaved(task, wasEditing);
-    setEditingTask(null);
+    closeForm();
   }
 
   return (
@@ -46,7 +59,7 @@ export default function DayPanel({ date, tasks, sessionGoals, onTaskSaved, onTas
         : (
           <ul className="calendar-task-list">
             {sortForDay(tasks).map(task => (
-              <TaskItem key={task.id} task={task} onToggle={toggleDone} onEdit={setEditingTask} onRemove={removeTask} />
+              <TaskItem key={task.id} task={task} onToggle={toggleDone} onEdit={startEdit} onRemove={removeTask} />
             ))}
           </ul>
         )}
@@ -55,14 +68,20 @@ export default function DayPanel({ date, tasks, sessionGoals, onTaskSaved, onTas
         <SessionLogger goals={sessionGoals} date={date} onLogged={(t) => onTaskSaved(t, false)} onError={setError} />
       )}
 
-      <TaskForm
-        key={editingTask?.id ?? 'nueva'}
-        date={date}
-        editingTask={editingTask}
-        onSaved={handleSaved}
-        onCancelEdit={() => setEditingTask(null)}
-        onError={setError}
-      />
+      {formOpen ? (
+        <TaskForm
+          key={editingTask?.id ?? 'nueva'}
+          date={date}
+          editingTask={editingTask}
+          onSaved={handleSaved}
+          onCancel={closeForm}
+          onError={setError}
+        />
+      ) : (
+        <button type="button" className="day-add-task" onClick={() => setAdding(true)}>
+          <i className="bi bi-plus-lg" aria-hidden="true" /> Nueva tarea
+        </button>
+      )}
     </>
   );
 }

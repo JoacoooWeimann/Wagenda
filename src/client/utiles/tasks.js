@@ -58,3 +58,15 @@ export function daySummary(tasks, max = 5) {
     total: tasks.length
   };
 }
+
+// Color de la etiqueta de una categoría: siempre el mismo para el mismo nombre
+// (sin importar mayúsculas ni espacios), sin guardarlo en ningún lado. Se suma
+// el código de cada letra y se elige uno de los N colores de la paleta
+// (--wg-tag-0 … --wg-tag-5 en main.css).
+export const TAG_COLORS = 6;
+export function categoryColor(category) {
+  const name = category.trim().toLowerCase();
+  let sum = 0;
+  for (const char of name) sum = (sum * 31 + char.codePointAt(0)) % 997;
+  return sum % TAG_COLORS;
+}

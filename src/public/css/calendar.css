@@ -144,38 +144,12 @@
   list-style: none;
   padding: 0;
   margin: 0 0 16px;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.calendar-task-list li {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--wg-border);
-  font-size: 0.9rem;
 }
-
-.calendar-task-done span {
-  text-decoration: line-through;
-  color: var(--wg-text-subtle);
-}
-
-.calendar-task-list button {
-  margin-left: auto;
-  background: none;
-  border: none;
-  color: var(--wg-text-subtle);
-  cursor: pointer;
-}
-
-.calendar-task-priority-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-}
+/* En el modal la lista tiene alto máximo (el formulario va debajo) */
+.calendar-modal .calendar-task-list { max-height: 50vh; overflow-y: auto; }
 .calendar-modal {
   /* Alto máximo + scroll: con el formulario completo el modal no entra en pantallas bajas.
      overflow-y: auto también recorta el contenido al borde redondeado. */
@@ -228,7 +202,9 @@
   min-width: 0;
 }
 
-.calendar-task-form button {
+.calendar-task-form button[type="submit"] {
+  flex: 1;
+  font-weight: 600;
   background: var(--wg-primary);
   color: var(--wg-on-primary);
   border: none;
@@ -287,44 +263,6 @@
   gap: 8px;
 }
 
-.calendar-task-info {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  cursor: pointer;
-}
-
-.calendar-task-range {
-  color: var(--wg-text-subtle);
-  font-size: 0.8rem;
-}
-
-.calendar-task-description {
-  color: var(--wg-text-subtle);
-  font-size: 0.8rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.calendar-task-confirm {
-  margin-left: auto;
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.calendar-task-list .calendar-task-confirm button {
-  margin-left: 0;
-  font-size: 0.8rem;
-  color: var(--wg-text-muted);
-}
-
-.calendar-task-list .calendar-task-confirm .calendar-task-confirm-delete {
-  color: var(--wg-danger);
-  font-weight: 600;
-}
-
 .calendar-form-title {
   margin: 8px 0 0;
   font-size: 0.95rem;
@@ -375,20 +313,6 @@
   }
 }
 
-/* Integración con objetivos */
-.calendar-task-goal {
-  align-self: flex-start;
-  font-size: 0.75rem;
-  color: var(--wg-primary);
-  background: var(--wg-primary-soft);
-  padding: 1px 6px;
-  border-radius: 999px;
-  text-decoration: none;
-  margin-top: 2px;
-}
-
-.calendar-task-goal:hover { background: var(--wg-primary-soft-hover); }
-
 .calendar-session {
   display: flex;
   flex-wrap: wrap;
@@ -418,3 +342,181 @@
   padding: 6px 10px;
   cursor: pointer;
 }
+
+/* --- Tareas como mini-cards --------------------------------------------------
+   El borde izquierdo es el color de la prioridad; al hacerla, se atenúa. */
+.task-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 12px 12px 14px;
+  background: var(--wg-surface-2);
+  border: 1px solid var(--wg-border);
+  border-left: 4px solid var(--task-priority, var(--wg-primary));
+  border-radius: 12px;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+.task-card:hover { border-color: var(--wg-border-strong); border-left-color: var(--task-priority); }
+.task-priority-alta { --task-priority: var(--wg-danger); }
+.task-priority-normal { --task-priority: var(--wg-primary); }
+.task-priority-baja { --task-priority: var(--wg-muted-dot); }
+.task-card.is-done { opacity: 0.55; }
+.task-card.is-done .task-title { text-decoration: line-through; color: var(--wg-text-muted); }
+
+/* Check redondo (botón con role="checkbox"): borde del color de la prioridad */
+.task-check {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  margin-top: 1px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--task-priority, var(--wg-primary));
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.task-check:hover { color: var(--task-priority); }
+.task-card.is-done .task-check { background: var(--wg-success); border-color: var(--wg-success); color: var(--wg-on-primary); }
+.task-check:disabled { cursor: not-allowed; }
+
+.task-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+}
+.task-card.is-readonly .task-body { cursor: default; }
+
+.task-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.task-title {
+  font-weight: 600;
+  color: var(--wg-text);
+  overflow-wrap: anywhere;
+}
+
+.task-description {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--wg-text-muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;          /* hasta 2 líneas */
+  -webkit-box-orient: vertical;
+}
+
+/* Etiqueta de categoría: el color sale de categoryColor() */
+.task-tag {
+  flex-shrink: 0;
+  max-width: 45%;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--tag);
+  background: color-mix(in srgb, var(--tag) 16%, transparent);
+}
+.task-tag-0 { --tag: var(--wg-tag-0); }
+.task-tag-1 { --tag: var(--wg-tag-1); }
+.task-tag-2 { --tag: var(--wg-tag-2); }
+.task-tag-3 { --tag: var(--wg-tag-3); }
+.task-tag-4 { --tag: var(--wg-tag-4); }
+.task-tag-5 { --tag: var(--wg-tag-5); }
+
+.task-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.task-chips:empty { display: none; }
+
+.task-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  color: var(--wg-text-muted);
+  background: var(--wg-surface-3);
+  text-decoration: none;
+}
+.task-chip-goal { color: var(--wg-primary); background: var(--wg-primary-soft); }
+.task-chip-goal:hover { color: var(--wg-primary-hover); background: var(--wg-primary-soft-hover); }
+.task-chip-hito { color: var(--wg-accent); background: var(--wg-accent-soft); }
+.task-chip-alta { color: var(--wg-danger); background: var(--wg-danger-soft); }
+
+.task-delete {
+  flex-shrink: 0;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--wg-text-subtle);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.task-card:hover .task-delete,
+.task-delete:focus-visible { opacity: 1; }
+.task-delete:hover { color: var(--wg-danger); background: var(--wg-danger-soft); }
+
+.task-confirm { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.task-confirm button {
+  border: none;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.78rem;
+  background: var(--wg-surface-3);
+  color: var(--wg-text-muted);
+  cursor: pointer;
+}
+.task-confirm .task-confirm-delete { background: var(--wg-danger-soft); color: var(--wg-danger); font-weight: 600; }
+
+/* --- "+ Nueva tarea": el formulario se abre recién al pedirlo --------------- */
+.day-add-task {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border: 1px dashed var(--wg-border-strong);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--wg-text-muted);
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.day-add-task:hover {
+  color: var(--wg-primary);
+  border-color: var(--wg-primary);
+  background: var(--wg-primary-soft);
+}
+
+.calendar-task-form-actions { display: flex; gap: 8px; }
+.calendar-task-form .calendar-task-form-cancel {
+  background: var(--wg-surface-2);
+  color: var(--wg-text-muted);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+.calendar-task-form .calendar-task-form-cancel:hover { background: var(--wg-surface-3); }
