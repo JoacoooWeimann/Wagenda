@@ -71,7 +71,7 @@ describe('resizePlan · extender', () => {
 
     const ops = resizePlan(goal, weeks, d('2026-11-08'));
     assert.deepEqual(ops.updateWeeks, [{ id: last.id, endDate: d('2026-11-08') }]); // sin target: es derivada
-    assert.deepEqual(ops.updateTasks, [{ id: unit.id, startDate: last.startDate, endDate: d('2026-11-08') }]);
+    assert.deepEqual(ops.updateTasks, [{ id: unit.id, startDate: last.startDate, endDate: d('2026-11-08'), startMinute: null, endMinute: null }]);
   });
 });
 
@@ -91,6 +91,8 @@ describe('resizePlan · acortar', () => {
     assert.ok(moved.every(m => key(m.startDate) === '2026-10-19' && key(m.endDate) === '2026-10-25'));
     // done no está en la operación: la tarea lo conserva
     assert.ok(moved.every(m => !('done' in m)));
+    // lo que se mueve queda sin horario
+    assert.ok(moved.every(m => m.startMinute === null && m.endMinute === null));
     assert.equal(ops.milestone.id, tasksOf(weeks).find(t => t.kind === 'hito').id);
   });
 
@@ -119,5 +121,43 @@ describe('resizePlan · límites', () => {
   it('rechaza más de 52 semanas con PlanError sobre deadline', () => {
     const { goal, weeks } = saved(running);
     assert.throws(() => resizePlan(goal, weeks, d('2028-01-01')), (err) => err instanceof PlanError && err.field === 'deadline');
+  });
+});
+
+describe('resizePlan · objetivos con horarios', () => {
+  const h = (hours) => hours * 60;
+  const agenda = { windows: Array.from({ length: 7 }, () => ({ startMinute: h(8), endMinute: h(23) })), routine: [], busy: {} };
+  const scheduled = { ...running, sessionMinutes: 60, timePreference: 'noche' };
+
+  function savedScheduled() {
+    let taskId = 1;
+    const weeks = generatePlan(scheduled, agenda).weeks.map(w => ({
+      ...w, id: w.number * 100, tasks: w.tasks.map(t => ({ ...t, id: taskId++, done: false }))
+    }));
+    return { goal: scheduled, weeks };
+  }
+
+  it('al extender, las semanas nuevas traen sus sesiones ubicadas en el tiempo libre', () => {
+    const { goal, weeks } = savedScheduled();
+    const ops = resizePlan(goal, weeks, d('2026-12-13'), agenda);
+    assert.deepEqual(ops.warnings, []);
+    for (const week of ops.createWeeks) {
+      assert.equal(week.tasks.length, week.target);
+      assert.ok(week.tasks.every(t => t.kind === 'sesion' && t.startMinute === h(19) && t.endMinute === h(20)));
+    }
+  });
+
+  it('al acortar, las sesiones pendientes planificadas de las semanas quitadas se descartan', () => {
+    const { goal, weeks } = savedScheduled();
+    const ops = resizePlan(goal, weeks, d('2026-10-25'), agenda); // quedan 3 semanas
+    const removedSessions = weeks.slice(3).flatMap(w => w.tasks).filter(t => t.kind === 'sesion');
+    assert.deepEqual(ops.deleteTaskIds.sort(), removedSessions.map(t => t.id).sort());
+    assert.equal(ops.updateTasks.filter(u => u.goalWeekId).length, 0); // no se amontonan en la última
+  });
+
+  it('sin agenda (objetivo sin horarios), no se ubica nada', () => {
+    const { goal, weeks } = saved(running);
+    const ops = resizePlan(goal, weeks, d('2026-12-13'));
+    assert.ok(ops.createWeeks.every(w => w.tasks === undefined));
   });
 });

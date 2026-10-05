@@ -128,3 +128,25 @@ describe('validateGoalUpdate', () => {
     assert.ok(validateGoalUpdate({ strategy: 'fases' }).error); // la estrategia no se edita
   });
 });
+
+describe('validateGoalCreate con horarios', () => {
+  it('fases: duración de la sesión y horario preferido (por defecto, cualquiera)', () => {
+    const { data, fields } = validateGoalCreate(fases({ sessionMinutes: 60, timePreference: 'noche' }));
+    assert.deepEqual(fields, {});
+    assert.deepEqual([data.sessionMinutes, data.timePreference], [60, 'noche']);
+    assert.equal(validateGoalCreate(fases({ sessionMinutes: 45 })).data.timePreference, 'cualquiera');
+    assert.ok(validateGoalCreate(fases({ sessionMinutes: 10 })).fields.sessionMinutes);
+    assert.ok(validateGoalCreate(fases({ sessionMinutes: 60, timePreference: 'siesta' })).fields.timePreference);
+    assert.equal(validateGoalCreate(fases()).data.sessionMinutes, undefined); // sin horarios
+  });
+
+  it('contenido con horarios: cada tipo dice cuánto lleva', () => {
+    const ok = validateGoalCreate(divisible({ sessionMinutes: 60, contents: [{ name: 'Unidad', count: 6, minutes: 120 }] }));
+    assert.deepEqual(ok.fields, {});
+    assert.deepEqual(ok.data.contents, [{ name: 'Unidad', count: 6, minutes: 120 }]);
+    assert.match(validateGoalCreate(divisible({ sessionMinutes: 60 })).fields.contents, /cuánto lleva/);
+    // sin horarios, los minutos se ignoran
+    assert.deepEqual(validateGoalCreate(divisible({ contents: [{ name: 'Unidad', count: 6, minutes: 5 }] })).data.contents,
+      [{ name: 'Unidad', count: 6 }]);
+  });
+});

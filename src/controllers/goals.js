@@ -10,6 +10,7 @@ import { generatePlan, resizePlan, PlanError, milestoneTitle } from '../utiles/p
 import { TYPE_LABELS } from '../utiles/planning/templates.js';
 import { parseDateOnly } from '../utiles/dates.js';
 import { TASK_WITH_GOAL } from '../utiles/queries.js';
+import { loadAgenda } from '../utiles/schedule/agenda.js';
 import { validateEntry } from '../utiles/validation/trackers.js';
 
 const GOAL_NOT_FOUND = 'Objetivo no encontrado';
@@ -25,12 +26,15 @@ async function itemError(itemId, userId) {
 // Valida y genera el plan. Devuelve { goal, plan } o { fields } si algo es inválido.
 // Un PlanError (ej. plazo corto para "fases") es un error de datos esperable: se
 // devuelve asociado a su campo, igual que los errores de validación.
-function buildGoalAndPlan(body) {
+// Con horarios, antes se arma la agenda del usuario (su semana y lo que ya tiene
+// ocupado): el algoritmo sigue siendo puro, la recibe hecha.
+async function buildGoalAndPlan(body, userId) {
   const { data, fields } = validateGoalCreate(body);
   if (hasErrors(fields)) return { fields };
 
   try {
-    return { goal: data, plan: generatePlan(data) };
+    const agenda = data.sessionMinutes ? await loadAgenda(userId, data.startDate, data.deadline) : null;
+    return { goal: data, plan: generatePlan(data, agenda) };
   } catch (err) {
     if (err instanceof PlanError) return { fields: { [err.field]: err.message } };
     throw err; // inesperado: lo maneja errorHandler
@@ -76,17 +80,17 @@ const GOAL_WITH_PLAN = {
 };
 
 // Genera el plan sin guardarlo: el usuario lo revisa antes de confirmar
-export function previewGoal(req, res) {
-  const { plan, fields } = buildGoalAndPlan(req.body);
+export async function previewGoal(req, res) {
+  const { plan, fields } = await buildGoalAndPlan(req.body, currentUserId(req));
   if (fields) return invalid(res, fields);
   res.json(plan);
 }
 
 export async function createGoal(req, res) {
-  const { goal, plan, fields } = buildGoalAndPlan(req.body);
+  const userId = currentUserId(req);
+  const { goal, plan, fields } = await buildGoalAndPlan(req.body, userId);
   if (fields) return invalid(res, fields);
 
-  const userId = currentUserId(req);
   const badItem = await itemError(goal.itemId, userId);
   if (badItem) return invalid(res, badItem);
 
@@ -348,9 +352,11 @@ export async function changeDeadline(req, res) {
   const { data, fields } = validateDeadlineChange(req.body, goal);
   if (hasErrors(fields)) return invalid(res, fields);
 
+  // Con horarios, las semanas nuevas se planifican en el tiempo libre
+  const agenda = goal.sessionMinutes ? await loadAgenda(goal.userId, goal.deadline, data.deadline) : null;
   let ops;
   try {
-    ops = resizePlan(goal, goal.weeks, data.deadline);
+    ops = resizePlan(goal, goal.weeks, data.deadline, agenda);
   } catch (err) {
     if (err instanceof PlanError) return invalid(res, { [err.field]: err.message });
     throw err;
@@ -362,9 +368,13 @@ export async function changeDeadline(req, res) {
     }
     // Última semana: la última conservada, o la última creada si se extendió
     let lastWeekId = goal.weeks[goal.weeks.length - ops.deleteWeekIds.length - 1].id;
-    for (const week of ops.createWeeks) {
-      lastWeekId = (await tx.goalWeek.create({ data: { ...week, goalId: goal.id } })).id;
+    const category = TYPE_LABELS[goal.type];
+    for (const { tasks = [], ...week } of ops.createWeeks) {
+      lastWeekId = (await tx.goalWeek.create({
+        data: { ...week, goalId: goal.id, tasks: { create: tasks.map(t => ({ ...t, category, userId: goal.userId })) } }
+      })).id;
     }
+    await tx.task.deleteMany({ where: { id: { in: ops.deleteTaskIds } } });
     for (const { id: taskId, ...taskData } of ops.updateTasks) {
       await tx.task.update({ where: { id: taskId }, data: taskData });
     }
@@ -378,5 +388,5 @@ export async function changeDeadline(req, res) {
     return tx.goal.update({ where: { id: goal.id }, data: { deadline: data.deadline }, include: GOAL_WITH_PLAN });
   });
 
-  res.json(withProgress(updated, { keepTasks: true }));
+  res.json({ ...withProgress(updated, { keepTasks: true }), warnings: ops.warnings });
 }

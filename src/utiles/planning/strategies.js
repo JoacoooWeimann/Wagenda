@@ -56,7 +56,8 @@ export function planDivisible(weeks, { contents, reviewWeek }) {
     contents.forEach((content, t) => {
       const numbers = Array.from({ length: countsByType[t][i] }, () => nextNumber[t]++);
       if (numbers.length === 0) return;
-      tasks.push(...numbers.map(n => ({ ...span, title: `${content.name} ${n}` })));
+      // `minutes`: cuánto lleva cada uno (solo al planificar con horarios)
+      tasks.push(...numbers.map(n => ({ ...span, title: `${content.name} ${n}`, minutes: content.minutes })));
       labelParts.push(numbers.length === 1
         ? `${content.name} ${numbers[0]}`
         : `${pluralize(content.name)} ${numbers[0]}–${numbers.at(-1)}`);

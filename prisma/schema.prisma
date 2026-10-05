@@ -43,6 +43,14 @@ enum GoalStatus {
 
 // username y passwordHash son opcionales solo por el invitado (id 1, del seed):
 // no tiene credenciales hasta que la primera cuenta registrada lo reclama.
+// Horario preferido para ubicar las sesiones de un objetivo
+enum TimePreference {
+  manana     // 6 a 12
+  tarde      // 12 a 19
+  noche      // 19 a 24
+  cualquiera
+}
+
 model User {
   id           Int     @id @default(autoincrement())
   name         String  @default("Invitado") // nombre visible
@@ -69,6 +77,11 @@ model Goal {
   deadline    DateTime
   status      GoalStatus   @default(activo)
   closedAt    DateTime?
+  // Planificación con horarios (null = objetivo sin horarios, como los
+  // anteriores a "Mi semana"): cuánto dura cada sesión y cuándo prefiere
+  // hacerse. Se guardan porque se vuelven a usar al cambiar el plazo.
+  sessionMinutes Int?
+  timePreference TimePreference?
   // Los parámetros de generación (contenidos, sesiones por semana, repaso) no se
   // guardan: el plan es editable, así que la fuente de verdad son sus semanas y tareas.
   createdAt   DateTime     @default(now())

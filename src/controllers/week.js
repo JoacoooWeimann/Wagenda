@@ -5,33 +5,15 @@ import {
   validateWindow, validateRoutineCreate, validateRoutineUpdate, checkTimeOrder, isWeekday
 } from '../utiles/validation/week.js';
 import { currentUserId } from '../utiles/currentUser.js';
-import { DEFAULT_WINDOW, overlaps } from '../utiles/schedule/slots.js';
+import { overlaps } from '../utiles/schedule/slots.js';
+import { loadWeek } from '../utiles/schedule/agenda.js';
 
 // "Mi semana": la franja activa de cada día y la rutina fija (trabajo,
 // cursada, entrenamiento). Es lo que usa el planificador para saber cuándo
 // hay tiempo libre.
 
 const ROUTINE_NOT_FOUND = 'Bloque no encontrado';
-const ROUTINE_WITH_TRACKER = { tracker: { select: { id: true, name: true } } };
-
-// Las 7 franjas (las que no se configuraron, con la de por defecto) y la rutina
-export async function loadWeek(userId) {
-  const [windows, routine] = await Promise.all([
-    prisma.dayWindow.findMany({ where: { userId } }),
-    prisma.routineBlock.findMany({
-      where: { userId },
-      orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }],
-      include: ROUTINE_WITH_TRACKER
-    })
-  ]);
-  return {
-    windows: Array.from({ length: 7 }, (_, weekday) => {
-      const saved = windows.find(w => w.weekday === weekday);
-      return { weekday, startMinute: saved?.startMinute ?? DEFAULT_WINDOW.startMinute, endMinute: saved?.endMinute ?? DEFAULT_WINDOW.endMinute, isDefault: !saved };
-    }),
-    routine
-  };
-}
+// La carga vive en utiles/schedule/agenda.js: también la usa el planificador
 
 export async function getWeek(req, res) {
   res.json(await loadWeek(currentUserId(req)));

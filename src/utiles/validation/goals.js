@@ -7,6 +7,9 @@ import { TYPE_LABELS, DEFAULT_STRATEGY } from '../planning/templates.js';
 export const GOAL_TYPES = Object.keys(TYPE_LABELS);
 export const STRATEGIES = ['divisible', 'fases'];
 export const GOAL_STATUSES = ['activo', 'logrado', 'abandonado'];
+export const TIME_PREFERENCES = ['manana', 'tarde', 'noche', 'cualquiera'];
+// Planificación con horarios: duración de una sesión y de un contenido (minutos)
+export const SCHEDULE_LIMITS = { sessionMinutes: [15, 240], contentMinutes: [15, 1200] };
 export const GOAL_LIMITS = { title: 100, description: 1000, contentTypes: 5, contentName: 30, contentCount: 100 };
 
 export function validateGoalCreate(body = {}) {
@@ -43,9 +46,22 @@ export function validateGoalCreate(body = {}) {
   else if (startDate && deadline < startDate) fields.deadline = 'La fecha límite no puede ser anterior al inicio';
   else data.deadline = deadline;
 
+  // Planificación con horarios (opcional): si viene la duración de la sesión,
+  // el planificador ubica cada sesión con día y horario en el tiempo libre
+  const scheduled = body.sessionMinutes !== undefined && body.sessionMinutes !== null;
+  if (scheduled) {
+    const [min, max] = SCHEDULE_LIMITS.sessionMinutes;
+    const sessionMinutes = intInRange(body.sessionMinutes, min, max, 'sessionMinutes', fields);
+    if (sessionMinutes !== undefined) data.sessionMinutes = sessionMinutes;
+
+    if (body.timePreference === undefined) data.timePreference = 'cualquiera';
+    else if (TIME_PREFERENCES.includes(body.timePreference)) data.timePreference = body.timePreference;
+    else fields.timePreference = 'Horario preferido inválido';
+  }
+
   // Parámetros según la estrategia. Los de la otra estrategia se ignoran (whitelist).
   if (data.strategy === 'divisible') {
-    const contents = validateContents(body.contents, fields);
+    const contents = validateContents(body.contents, fields, { scheduled });
     if (contents) data.contents = contents;
 
     if (body.reviewWeek === undefined) data.reviewWeek = true;
@@ -67,9 +83,10 @@ export function validateGoalCreate(body = {}) {
 }
 
 // Tipos de contenido de un objetivo divisible: [{ name, count }], ej.
-// [{ name: 'Unidad', count: 6 }, { name: 'TP', count: 4 }]. Un solo mensaje de
-// error en `contents`, indicando cuál fila falla.
-function validateContents(value, fields) {
+// [{ name: 'Unidad', count: 6 }, { name: 'TP', count: 4 }]. Con horarios, cada
+// tipo dice además cuánto lleva cada uno: `minutes`. Un solo mensaje de error
+// en `contents`, indicando cuál fila falla.
+function validateContents(value, fields, { scheduled = false } = {}) {
   const { contentTypes, contentName, contentCount } = GOAL_LIMITS;
   if (!Array.isArray(value) || value.length === 0) {
     fields.contents = 'Agregá al menos un tipo de contenido';
@@ -85,11 +102,16 @@ function validateContents(value, fields) {
     const rowFields = {};
     const name = requiredText(item?.name, contentName, 'name', rowFields, 'falta el nombre');
     const count = intInRange(item?.count, 1, contentCount, 'count', rowFields);
+    const [minMinutes, maxMinutes] = SCHEDULE_LIMITS.contentMinutes;
+    const minutes = scheduled ? intInRange(item?.minutes, minMinutes, maxMinutes, 'minutes', rowFields) : undefined;
     if (hasErrors(rowFields)) {
-      fields.contents = `Contenido ${i + 1}: ${rowFields.name || `la cantidad debe ser un entero entre 1 y ${contentCount}`}`;
+      const message = rowFields.name
+        || (rowFields.count && `la cantidad debe ser un entero entre 1 y ${contentCount}`)
+        || `cuánto lleva cada uno: entre ${minMinutes} y ${maxMinutes} minutos`;
+      fields.contents = `Contenido ${i + 1}: ${message}`;
       return undefined;
     }
-    contents.push({ name, count });
+    contents.push(scheduled ? { name, count, minutes } : { name, count });
   }
 
   // Nombres repetidos generarían tareas con el mismo título ("TP 1" dos veces)
