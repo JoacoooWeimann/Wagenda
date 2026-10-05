@@ -1,0 +1,127 @@
+/* Mi semana: grilla de lunes a domingo, de 6 a 24 */
+.week-container {
+  max-width: 1200px;
+  margin: 32px auto;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.week-grid {
+  display: grid;
+  grid-template-columns: 44px repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.week-hours { position: relative; margin-top: 76px; height: 720px; }
+.week-hours span {
+  position: absolute;
+  right: 4px;
+  transform: translateY(-50%);
+  font-size: 0.7rem;
+  color: var(--wg-text-subtle);
+}
+
+.week-day { min-width: 0; display: flex; flex-direction: column; }
+.week-day-header {
+  height: 70px;
+  margin-bottom: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.8rem;
+}
+.week-free { color: var(--wg-text-subtle); font-size: 0.72rem; }
+
+.week-window-editor { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+.week-window-editor input {
+  width: 74px;
+  padding: 1px 4px;
+  border: 1px solid var(--wg-border);
+  border-radius: 6px;
+  font-size: 0.72rem;
+}
+
+.week-day-body {
+  position: relative;
+  height: 720px;              /* 18 h * 40 px */
+  background: var(--wg-bg);
+  border: 1px solid var(--wg-border);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: copy;
+}
+.week-hour-line { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--wg-border); pointer-events: none; }
+
+/* Franja disponible: sombreada */
+.week-window {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--wg-primary-soft);
+  pointer-events: none;
+}
+
+/* Bloque de rutina: el color sale del seguimiento (mismas clases que las etiquetas) */
+.week-block {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  min-height: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 3px 6px;
+  overflow: hidden;
+  text-align: left;
+  font-size: 0.72rem;
+  color: var(--wg-text);
+  background: color-mix(in srgb, var(--tag) 22%, var(--wg-surface));
+  border: none;
+  border-left: 3px solid var(--tag);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.week-block strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.week-block span { color: var(--wg-text-muted); }
+.week-block:hover { filter: brightness(1.15); }
+
+.week-legend { display: flex; align-items: center; gap: 6px; margin-top: 12px; }
+.week-legend-window { width: 14px; height: 14px; border-radius: 4px; background: var(--wg-primary-soft); display: inline-block; }
+
+/* Formulario de rutina: días como botones */
+.routine-days { border: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.routine-days legend { font-size: 0.8rem; color: var(--wg-text-muted); margin-bottom: 4px; width: 100%; }
+.routine-days button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--wg-border-strong);
+  background: var(--wg-surface-2);
+  color: var(--wg-text-muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+.routine-days button.is-on { background: var(--wg-primary); border-color: var(--wg-primary); color: var(--wg-on-primary); }
+
+/* Pestañas de día: solo en pantallas angostas */
+.week-tabs { display: none; }
+
+@media (max-width: 991px) {
+  .week-tabs { display: flex; gap: 4px; overflow-x: auto; }
+  .week-tabs button {
+    flex: 1;
+    padding: 8px 4px;
+    border: 1px solid var(--wg-border);
+    border-radius: 8px;
+    background: var(--wg-surface);
+    color: var(--wg-text-muted);
+    cursor: pointer;
+  }
+  .week-tabs button.is-on { background: var(--wg-primary-soft); color: var(--wg-primary); border-color: var(--wg-primary); }
+
+  .week-grid { grid-template-columns: 44px minmax(0, 1fr); }
+  .week-day:not(.is-selected) { display: none; }
+}

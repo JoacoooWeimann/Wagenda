@@ -83,3 +83,10 @@ export const unshareTracker = (id, shareId) => request('DELETE', `/api/groups/${
 export const joinTracker = (id, shareId) => request('POST', `/api/groups/${id}/shares/${shareId}/join`);
 export const leaveTracker = (id, shareId) => request('DELETE', `/api/groups/${id}/shares/${shareId}/join`);
 export const getRanking = (id, shareId) => request('GET', `/api/groups/${id}/shares/${shareId}/ranking`);
+
+// Mi semana: franjas por día y rutina
+export const getWeek = () => request('GET', '/api/week');
+export const putWindow = (weekday, window) => request('PUT', `/api/week/windows/${weekday}`, window);
+export const createRoutine = (block) => request('POST', '/api/routine', block);
+export const updateRoutine = (id, changes) => request('PATCH', `/api/routine/${id}`, changes);
+export const deleteRoutine = (id) => request('DELETE', `/api/routine/${id}`);

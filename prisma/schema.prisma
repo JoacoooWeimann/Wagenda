@@ -55,6 +55,8 @@ model User {
   items    TrackerItem[]
   groups   GroupMember[]
   joins    ShareJoin[]
+  windows  DayWindow[]
+  routine  RoutineBlock[]
 }
 
 model Goal {
@@ -161,6 +163,7 @@ model Tracker {
   items  TrackerItem[]
   tasks  Task[]        // tareas vinculadas: su cantidad hecha es la "actividad"
   shares TrackerShare[]
+  routine RoutineBlock[]
 
   // Copia de un seguimiento compartido al que el usuario se unió. Mientras está
   // vinculada, su estructura la define el dueño del original. SetNull: si el
@@ -296,4 +299,42 @@ model ShareJoin {
 
   @@unique([shareId, userId])
   @@index([userId])
+}
+
+// --- Mi semana ----------------------------------------------------------------
+// Horarios en minutos desde las 00:00 (540 = 09:00), en la hora local del
+// usuario, como las fechas de calendario. Nada cruza la medianoche (máx. 1440).
+// weekday: 0 = lunes … 6 = domingo, como las semanas de la app.
+
+// Franja activa de un día de la semana ("los lunes estoy disponible de 7 a 23").
+// Si un día no tiene, se usa la franja por defecto (utiles/schedule/slots.js).
+model DayWindow {
+  id          Int @id @default(autoincrement())
+  weekday     Int
+  startMinute Int
+  endMinute   Int
+
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+
+  @@unique([userId, weekday])
+}
+
+// Bloque fijo de la rutina semanal: "Trabajo", lunes de 9:00 a 17:00. Puede
+// vincularse a un seguimiento (toma su nombre y color). SetNull: borrar el
+// seguimiento no borra el bloque.
+model RoutineBlock {
+  id          Int      @id @default(autoincrement())
+  weekday     Int
+  startMinute Int
+  endMinute   Int
+  title       String
+  createdAt   DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  tracker   Tracker? @relation(fields: [trackerId], references: [id], onDelete: SetNull)
+  trackerId Int?
+
+  @@index([userId, weekday])
 }

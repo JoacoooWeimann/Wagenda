@@ -15,7 +15,8 @@ export default defineConfig({
         goals: path.resolve(import.meta.dirname, 'src/client/goals.jsx'), // objetivos
         trackers: path.resolve(import.meta.dirname, 'src/client/trackers.jsx'), // seguimientos
         groups: path.resolve(import.meta.dirname, 'src/client/groups.jsx'), // grupos
-        home: path.resolve(import.meta.dirname, 'src/client/home.jsx') // inicio: la card del día
+        home: path.resolve(import.meta.dirname, 'src/client/home.jsx'), // inicio: la card del día
+        week: path.resolve(import.meta.dirname, 'src/client/week.jsx') // Mi semana
       },
       output: {
         entryFileNames: '[name].js',

@@ -39,6 +39,8 @@ export async function startTestServer() {
     await prisma.goal.deleteMany(); // cascade: sus semanas y tareas
     await prisma.task.deleteMany();
     await prisma.tracker.deleteMany(); // cascade: sus ítems y registros
+    await prisma.routineBlock.deleteMany();
+    await prisma.dayWindow.deleteMany();
     await prisma.group.deleteMany(); // cascade: miembros, tableros compartidos y uniones
     await prisma.user.deleteMany({ where: { id: { not: 1 } } });
     await prisma.session.deleteMany();
