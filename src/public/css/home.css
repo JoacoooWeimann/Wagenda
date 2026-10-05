@@ -97,3 +97,96 @@
   .day-card { padding: 16px; }
   .day-card-title h1 { font-size: 1.15rem; }
 }
+
+/* --- Carrusel: previews de ayer y mañana a los costados (pantallas anchas) --- */
+.day-preview { display: none; }
+
+@media (min-width: 1200px) {
+  .home-main { max-width: 1120px; }
+
+  .day-carousel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 560px) minmax(0, 1fr);
+    align-items: start;
+    gap: 20px;
+  }
+
+  .day-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    margin-top: 24px;              /* un poco más abajo que la card: se lee como "de fondo" */
+    padding: 16px;
+    text-align: left;
+    color: var(--wg-text-muted);
+    background: var(--wg-surface);
+    border: 1px solid var(--wg-border);
+    border-radius: var(--wg-radius);
+    opacity: 0.6;
+    transform: scale(0.96);
+    cursor: pointer;
+    transition: opacity 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+  }
+  .day-preview:hover,
+  .day-preview:focus-visible {
+    opacity: 1;
+    transform: scale(1);
+    border-color: var(--wg-primary);
+  }
+
+  .day-preview-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--wg-text-subtle);
+  }
+  .day-preview-next .day-preview-label { align-self: flex-end; }
+
+  .day-preview-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--wg-text);
+  }
+
+  .day-preview ul {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .day-preview li {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 0.85rem;
+    min-width: 0;
+  }
+  .day-preview li span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .day-preview li.is-done span { text-decoration: line-through; color: var(--wg-text-subtle); }
+  .day-preview li.is-done i { color: var(--wg-success); }
+
+  .day-preview-more,
+  .day-preview-empty { font-size: 0.8rem; color: var(--wg-text-subtle); }
+
+  .day-preview-count {
+    margin-top: 6px;
+    padding-top: 8px;
+    border-top: 1px solid var(--wg-border);
+    font-size: 0.78rem;
+  }
+}
+
+@media (min-width: 1200px) and (prefers-reduced-motion: reduce) {
+  .day-preview { transition: none; transform: none; }
+}

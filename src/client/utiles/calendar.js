@@ -72,3 +72,9 @@ export function parseDateParam(value) {
 
 // Año y mes (números) de una clave, para pedir las tareas del mes
 export const monthOf = (key) => ({ year: Number(key.slice(0, 4)), month: Number(key.slice(5, 7)) });
+
+// "2026-10-03" -> "Sábado 3 de oct." (para las previews, que son angostas)
+export function shortDayTitle(key) {
+  const date = keyToUTC(key);
+  return `${DIAS_COMPLETOS[date.getUTCDay()]} ${date.getUTCDate()} de ${MESES[date.getUTCMonth()].slice(0, 3).toLowerCase()}.`;
+}

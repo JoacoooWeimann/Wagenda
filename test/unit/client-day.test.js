@@ -47,3 +47,22 @@ describe('sessionGoalsFor', () => {
     assert.deepEqual(sessionGoalsFor(goals, '2026-10-07', '2026-10-06'), []); // futuro
   });
 });
+
+describe('previews de ayer y mañana', () => {
+  it('shortDayTitle', async () => {
+    const { shortDayTitle } = await import('../../src/client/utiles/calendar.js');
+    assert.equal(shortDayTitle('2026-10-03'), 'Sábado 3 de oct.');
+  });
+
+  it('daySummary: primeras N en el orden del día, el resto y cuántas hechas', async () => {
+    const { daySummary } = await import('../../src/client/utiles/tasks.js');
+    const t = (id, done, priority = 'normal') => ({ id, done, priority });
+    const tasks = [t(1, true), t(2, false, 'baja'), t(3, false, 'alta'), t(4, false), t(5, true)];
+    const summary = daySummary(tasks, 3);
+    assert.deepEqual(summary.items.map(x => x.id), [3, 4, 2]); // pendientes primero, por prioridad
+    assert.equal(summary.more, 2);
+    assert.equal(summary.done, 2);
+    assert.equal(summary.total, 5);
+    assert.deepEqual(daySummary([]), { items: [], more: 0, done: 0, total: 0 });
+  });
+});

@@ -45,3 +45,16 @@ export function sessionGoalsFor(goals, dateKey, today) {
     g.startDate.slice(0, 10) <= dateKey && dateKey <= g.deadline.slice(0, 10)
   );
 }
+
+// Resumen de un día para las previews del inicio: las primeras `max` tareas
+// (en el mismo orden que la lista del día), cuántas quedan afuera y cuántas
+// están hechas
+export function daySummary(tasks, max = 5) {
+  const sorted = sortForDay(tasks);
+  return {
+    items: sorted.slice(0, max),
+    more: Math.max(0, sorted.length - max),
+    done: tasks.filter(t => t.done).length,
+    total: tasks.length
+  };
+}

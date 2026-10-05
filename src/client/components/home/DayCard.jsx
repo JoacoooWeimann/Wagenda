@@ -4,6 +4,7 @@ import { dayInRange, sessionGoalsFor } from '../../utiles/tasks.js';
 import { shiftDay, dayTitle, relativeLabel, monthOf } from '../../utiles/calendar.js';
 import { ErrorBanner } from '../common.jsx';
 import DayPanel from '../calendar/DayPanel.jsx';
+import DayPreview from './DayPreview.jsx';
 
 const SWIPE_MIN_PX = 50;
 const monthKey = (key) => key.slice(0, 7); // "2026-10"
@@ -11,7 +12,8 @@ const isTyping = (el) => el?.closest?.('input, textarea, select, [contenteditabl
 
 // Card del inicio: un día con sus tareas, que se recorre como un carrusel
 // (flechas, teclas ← →, o deslizando en el celular). El contenido del día es
-// DayPanel, el mismo del modal del calendario.
+// DayPanel, el mismo del modal del calendario. En pantallas anchas, a los
+// costados se ven las previews de ayer y mañana (el CSS las oculta en las angostas).
 export default function DayCard({ initialDate, today }) {
   const [date, setDate] = useState(initialDate);
   const [direction, setDirection] = useState(null); // 'next' | 'prev': sentido de la animación
@@ -21,19 +23,36 @@ export default function DayCard({ initialDate, today }) {
   const pointerStart = useRef(null);
 
   const { year, month } = monthOf(date);
+  const prevDate = shiftDay(date, -1);
+  const nextDate = shiftDay(date, 1);
   const tasks = months[monthKey(date)];
 
+  // Tareas de un día, o undefined si su mes todavía no llegó
+  function tasksOn(key) {
+    const list = months[monthKey(key)];
+    const { year: y, month: m } = monthOf(key);
+    return list?.filter(t => dayInRange(y, m, Number(key.slice(8, 10)), t));
+  }
+
   // Las tareas se piden por mes (la API ya funciona así) y quedan en cache:
-  // moverse dentro del mismo mes no hace otro pedido. `ignore` descarta una
-  // respuesta vieja si se cambió de mes antes de que llegara.
+  // moverse dentro del mismo mes no hace otro pedido. Se piden el mes del día y,
+  // si ayer o mañana caen en otro mes, también ese (para las previews).
+  // `requested` evita pedir dos veces un mes que ya está en camino. Una
+  // respuesta que llega tarde no pisa nada: cada una llena solo su mes.
+  const requested = useRef(new Set());
+  const needed = [...new Set([date, prevDate, nextDate].map(monthKey))];
   useEffect(() => {
-    if (tasks) return;
-    let ignore = false;
-    getTasks(year, month)
-      .then(data => { if (!ignore) setMonths(m => ({ ...m, [monthKey(date)]: data })); })
-      .catch(err => { if (!ignore) setError(`No se pudieron cargar las tareas: ${err.message}`); });
-    return () => { ignore = true; };
-  }, [year, month, tasks]);
+    for (const key of needed) {
+      if (months[key] || requested.current.has(key)) continue;
+      requested.current.add(key);
+      getTasks(Number(key.slice(0, 4)), Number(key.slice(5, 7)))
+        .then(data => setMonths(m => ({ ...m, [key]: data })))
+        .catch(err => {
+          requested.current.delete(key); // se reintenta al volver a ese mes
+          setError(`No se pudieron cargar las tareas: ${err.message}`);
+        });
+    }
+  }, [needed.join(), months]);
 
   // Objetivos, para ofrecer registrar sesiones (si falla, solo no se ofrece)
   useEffect(() => {
@@ -81,8 +100,10 @@ export default function DayCard({ initialDate, today }) {
   }
 
   // Una tarea guardada puede abarcar otros meses: se actualiza el mes actual y
-  // se descartan los demás del cache, que se vuelven a pedir al visitarlos.
+  // se descartan los demás del cache, que se vuelven a pedir (también los de
+  // las previews, si caen en otro mes).
   function updateMonth(fn) {
+    requested.current = new Set([monthKey(date)]);
     setMonths(m => ({ [monthKey(date)]: fn(m[monthKey(date)] ?? []) }));
   }
   const handleTaskSaved = (task, wasEditing) =>
@@ -90,50 +111,60 @@ export default function DayCard({ initialDate, today }) {
   const handleTaskRemoved = (id) => updateMonth(list => list.filter(t => t.id !== id));
 
   const relative = relativeLabel(date, today);
-  const dayTasks = tasks?.filter(t => dayInRange(year, month, Number(date.slice(8, 10)), t)) ?? [];
+  const dayTasks = tasksOn(date) ?? [];
+  // Etiqueta de cada preview: "Ayer"/"Hoy"/"Mañana" si corresponde, si no "Día anterior"/"Día siguiente"
+  const previewLabel = (key, fallback) => relativeLabel(key, today) ?? fallback;
 
   return (
-    <section className="day-card" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
-      <ErrorBanner message={error} onClose={() => setError(null)} />
+    <div className="day-carousel">
+      <DayPreview side="prev" date={prevDate} label={previewLabel(prevDate, 'Día anterior')}
+        tasks={tasksOn(prevDate)} onOpen={() => go(-1)} />
 
-      <header className="day-card-header">
-        <button type="button" className="day-card-arrow" onClick={() => go(-1)} aria-label="Día anterior">
-          <i className="bi bi-chevron-left" aria-hidden="true" />
-        </button>
-        <div className="day-card-title">
-          {relative && <span className={`day-card-relative${relative === 'Hoy' ? ' is-today' : ''}`}>{relative}</span>}
-          <h1>{dayTitle(date)}</h1>
-        </div>
-        <button type="button" className="day-card-arrow" onClick={() => go(1)} aria-label="Día siguiente">
-          <i className="bi bi-chevron-right" aria-hidden="true" />
-        </button>
-      </header>
+      <section className="day-card" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
+        <ErrorBanner message={error} onClose={() => setError(null)} />
 
-      <div className="day-card-actions">
-        {date !== today && (
-          <button type="button" className="goal-btn goal-btn-small" onClick={goToday}>
-            <i className="bi bi-arrow-counterclockwise" aria-hidden="true" /> Volver a hoy
+        <header className="day-card-header">
+          <button type="button" className="day-card-arrow" onClick={() => go(-1)} aria-label="Día anterior">
+            <i className="bi bi-chevron-left" aria-hidden="true" />
           </button>
-        )}
-        <a className="goal-btn goal-btn-small" href={`/calendar?year=${year}&month=${month}`}>
-          <i className="bi bi-calendar3" aria-hidden="true" /> Calendario
-        </a>
-      </div>
+          <div className="day-card-title">
+            {relative && <span className={`day-card-relative${relative === 'Hoy' ? ' is-today' : ''}`}>{relative}</span>}
+            <h1>{dayTitle(date)}</h1>
+          </div>
+          <button type="button" className="day-card-arrow" onClick={() => go(1)} aria-label="Día siguiente">
+            <i className="bi bi-chevron-right" aria-hidden="true" />
+          </button>
+        </header>
 
-      {/* key = fecha: el panel se recrea (estado limpio) y la animación se repite en cada cambio */}
-      <div key={date} className={`day-card-body${direction ? ` day-slide-${direction}` : ''}`} aria-live="polite">
-        {tasks === undefined
-          ? <p className="day-empty">Cargando…</p>
-          : (
-            <DayPanel
-              date={date}
-              tasks={dayTasks}
-              sessionGoals={sessionGoalsFor(goals, date, today)}
-              onTaskSaved={handleTaskSaved}
-              onTaskRemoved={handleTaskRemoved}
-            />
+        <div className="day-card-actions">
+          {date !== today && (
+            <button type="button" className="goal-btn goal-btn-small" onClick={goToday}>
+              <i className="bi bi-arrow-counterclockwise" aria-hidden="true" /> Volver a hoy
+            </button>
           )}
-      </div>
-    </section>
+          <a className="goal-btn goal-btn-small" href={`/calendar?year=${year}&month=${month}`}>
+            <i className="bi bi-calendar3" aria-hidden="true" /> Calendario
+          </a>
+        </div>
+
+        {/* key = fecha: el panel se recrea (estado limpio) y la animación se repite en cada cambio */}
+        <div key={date} className={`day-card-body${direction ? ` day-slide-${direction}` : ''}`} aria-live="polite">
+          {tasks === undefined
+            ? <p className="day-empty">Cargando…</p>
+            : (
+              <DayPanel
+                date={date}
+                tasks={dayTasks}
+                sessionGoals={sessionGoalsFor(goals, date, today)}
+                onTaskSaved={handleTaskSaved}
+                onTaskRemoved={handleTaskRemoved}
+              />
+            )}
+        </div>
+      </section>
+
+      <DayPreview side="next" date={nextDate} label={previewLabel(nextDate, 'Día siguiente')}
+        tasks={tasksOn(nextDate)} onOpen={() => go(1)} />
+    </div>
   );
 }
