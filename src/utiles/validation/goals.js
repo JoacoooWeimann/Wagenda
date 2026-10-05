@@ -57,10 +57,10 @@ export function validateGoalCreate(body = {}) {
     const sessionsPerWeek = intInRange(body.sessionsPerWeek, 1, 7, 'sessionsPerWeek', fields);
     if (sessionsPerWeek !== undefined) data.sessionsPerWeek = sessionsPerWeek;
 
-    // Seguimiento vinculado (opcional): solo en fases, que es donde hay sesiones.
-    // Que sea del usuario lo verifica el controller (necesita la base).
-    const trackerId = optionalTrackerId(body.trackerId, fields);
-    if (trackerId) data.trackerId = trackerId;
+    // Ítem de un seguimiento vinculado (opcional): solo en fases, que es donde
+    // hay sesiones. Que sea del usuario lo verifica el controller (necesita la base).
+    const itemId = optionalItemId(body.itemId, fields);
+    if (itemId) data.itemId = itemId;
   }
 
   return { data, fields };
@@ -156,9 +156,9 @@ export function validateGoalUpdate(body = {}) {
 
   // null desvincula. Que sea del usuario y que el objetivo sea por fases lo
   // verifica el controller.
-  if (body.trackerId !== undefined) {
-    const trackerId = optionalTrackerId(body.trackerId, fields);
-    if (trackerId !== undefined) data.trackerId = trackerId;
+  if (body.itemId !== undefined) {
+    const itemId = optionalItemId(body.itemId, fields);
+    if (itemId !== undefined) data.itemId = itemId;
   }
 
   // Cerrar (logrado / abandonado) o reabrir (activo). closedAt lo pone el controller.
@@ -194,10 +194,10 @@ export function validateDeadlineChange(body = {}, goal) {
   return { data: hasErrors(fields) ? {} : { deadline }, fields };
 }
 
-// id de seguimiento opcional: null o un entero positivo. Devuelve undefined si es inválido.
-function optionalTrackerId(value, fields) {
+// id de ítem opcional: null o un entero positivo. Devuelve undefined si es inválido.
+function optionalItemId(value, fields) {
   if (value === undefined || value === null) return value;
   if (Number.isInteger(value) && value > 0) return value;
-  fields.trackerId = 'Seguimiento inválido';
+  fields.itemId = 'Ítem inválido';
   return undefined;
 }

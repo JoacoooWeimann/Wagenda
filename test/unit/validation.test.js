@@ -45,10 +45,12 @@ describe('validateTaskCreate', () => {
     assert.equal(validateTaskCreate({ ...valid, description: '  ' }).data.description, null);
   });
 
-  it('trackerId: un id o null; la categoría escrita ya no se acepta', () => {
+  it('trackerId e itemId: un id o null; la categoría escrita ya no se acepta', () => {
     assert.equal(validateTaskCreate({ ...valid, trackerId: 3 }).data.trackerId, 3);
     assert.equal(validateTaskUpdate({ trackerId: null }).data.trackerId, null);
     assert.ok(validateTaskCreate({ ...valid, trackerId: 'facu' }).fields.trackerId);
+    assert.equal(validateTaskCreate({ ...valid, itemId: 5 }).data.itemId, 5);
+    assert.ok(validateTaskCreate({ ...valid, itemId: 0 }).fields.itemId);
     assert.equal('category' in validateTaskCreate({ ...valid, category: 'Facultad' }).data, false);
   });
 

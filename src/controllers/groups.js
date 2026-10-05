@@ -5,11 +5,11 @@ import { validateGroupCreate, validateGroupUpdate } from '../utiles/validation/g
 import { currentUserId } from '../utiles/currentUser.js';
 import { generateInviteCode, normalizeInviteCode } from '../utiles/groups/inviteCode.js';
 import { joinShare, removeJoins, removeShares } from '../utiles/groups/sharing.js';
-import { trackerSummary, limitPerWeek, activityByTracker, cappedActivityTotal } from '../utiles/trackers.js';
+import { trackerSummary, limitPerWeek, activityBy, cappedActivityTotal } from '../utiles/trackers.js';
 
 // Un grupo ajeno responde igual que uno inexistente: no revela que existe
 const GROUP_NOT_FOUND = 'Grupo no encontrado';
-const SHARE_NOT_FOUND = 'Tablero compartido no encontrado';
+const SHARE_NOT_FOUND = 'Seguimiento compartido no encontrado';
 const OWNER_ONLY = { error: 'Solo quien administra el grupo puede hacer esto' };
 
 const USER_PUBLIC = { select: { id: true, name: true, username: true } };
@@ -44,12 +44,12 @@ async function findOwnership(req, res) {
   return found;
 }
 
-// Tablero compartido en el grupo, a partir de la URL, o null (respuesta ya enviada)
+// Seguimiento compartido en el grupo, a partir de la URL, o null (respuesta ya enviada)
 async function findShare(req, res, groupId) {
   const shareId = parseId(req.params.shareId);
-  const share = shareId && await prisma.boardShare.findFirst({
+  const share = shareId && await prisma.trackerShare.findFirst({
     where: { id: shareId, groupId },
-    include: { board: { select: { id: true, name: true, userId: true } } }
+    include: { tracker: { select: { id: true, name: true, itemLabel: true, userId: true } } }
   });
   if (!share) notFound(res, SHARE_NOT_FOUND);
   return share || null;
@@ -63,8 +63,8 @@ async function uniqueInviteCode() {
   }
 }
 
-// Detalle del grupo para un miembro: miembros y tableros compartidos (con si
-// el usuario participa). Nunca incluye datos de los tableros: eso es el ranking.
+// Detalle del grupo para un miembro: miembros y seguimientos compartidos (con
+// si el usuario participa). Nunca incluye sus datos: eso es el ranking.
 async function groupDetail(groupId, userId) {
   const group = await prisma.group.findUnique({
     where: { id: groupId },
@@ -73,7 +73,12 @@ async function groupDetail(groupId, userId) {
       shares: {
         orderBy: { createdAt: 'asc' },
         include: {
-          board: { select: { id: true, name: true, description: true, user: USER_PUBLIC } },
+          tracker: {
+            select: {
+              id: true, name: true, description: true, itemLabel: true, user: USER_PUBLIC,
+              items: { orderBy: { name: 'asc' }, select: { name: true } }
+            }
+          },
           joins: { select: { userId: true } }
         }
       }
@@ -88,9 +93,9 @@ async function groupDetail(groupId, userId) {
     inviteCode: group.inviteCode,
     myRole: me.role,
     members: group.members.map(m => ({ ...m.user, role: m.role, joinedAt: m.joinedAt })),
-    shares: group.shares.map(({ id, board: { user, ...board }, joins }) => ({
+    shares: group.shares.map(({ id, tracker: { user, items, ...tracker }, joins }) => ({
       id,
-      board,
+      tracker: { ...tracker, items: items.map(i => i.name) },
       owner: user,
       isMine: user.id === userId,
       joined: joins.some(j => j.userId === userId),
@@ -175,11 +180,11 @@ export async function joinGroup(req, res) {
 }
 
 // Salida de un miembro (por su cuenta o expulsado): deja de participar de los
-// tableros del grupo, sus tableros dejan de estar compartidos ahí, y sale.
+// seguimientos del grupo, los suyos dejan de estar compartidos ahí, y sale.
 // Sus copias quedan como personales: nadie pierde sus datos.
 async function removeMember(tx, groupId, userId) {
   await removeJoins(tx, { userId, share: { groupId } });
-  await removeShares(tx, { groupId, board: { userId } });
+  await removeShares(tx, { groupId, tracker: { userId } });
   await tx.groupMember.delete({ where: { groupId_userId: { groupId, userId } } });
 }
 
@@ -227,32 +232,36 @@ export async function transferGroup(req, res) {
   res.json(await groupDetail(found.group.id, found.userId));
 }
 
-// --- Tableros compartidos ----------------------------------------------------
+// --- Seguimientos compartidos ----------------------------------------------
 
-// Un miembro comparte un tablero suyo (un original: una copia ya es de otro)
-export async function shareBoard(req, res) {
+// Un miembro comparte un seguimiento suyo (un original: una copia ya es de otro)
+export async function shareTracker(req, res) {
   const found = await findMembership(req, res);
   if (!found) return;
 
-  const boardId = Number.isInteger(req.body?.boardId) ? req.body.boardId : null;
-  const board = boardId && await prisma.board.findFirst({ where: { id: boardId, userId: found.userId } });
-  if (!board) return invalid(res, { boardId: 'Tablero no encontrado' });
-  if (board.sourceBoardId) return invalid(res, { boardId: 'Es una copia de un tablero compartido: solo su dueño lo comparte' });
+  const trackerId = Number.isInteger(req.body?.trackerId) ? req.body.trackerId : null;
+  const tracker = trackerId && await prisma.tracker.findFirst({ where: { id: trackerId, userId: found.userId } });
+  if (!tracker) return invalid(res, { trackerId: 'Seguimiento no encontrado' });
+  if (tracker.sourceTrackerId) {
+    return invalid(res, { trackerId: 'Es una copia de un seguimiento compartido: solo su dueño lo comparte' });
+  }
 
-  const already = await prisma.boardShare.findUnique({ where: { groupId_boardId: { groupId: found.group.id, boardId } } });
-  if (already) return invalid(res, { boardId: 'Ese tablero ya está compartido en el grupo' });
+  const already = await prisma.trackerShare.findUnique({
+    where: { groupId_trackerId: { groupId: found.group.id, trackerId } }
+  });
+  if (already) return invalid(res, { trackerId: 'Ese seguimiento ya está compartido en el grupo' });
 
-  await prisma.boardShare.create({ data: { groupId: found.group.id, boardId } });
+  await prisma.trackerShare.create({ data: { groupId: found.group.id, trackerId } });
   res.status(201).json(await groupDetail(found.group.id, found.userId));
 }
 
 // Deja de compartirlo su dueño, o lo quita quien administra el grupo (moderación)
-export async function unshareBoard(req, res) {
+export async function unshareTracker(req, res) {
   const found = await findMembership(req, res);
   if (!found) return;
   const share = await findShare(req, res, found.group.id);
   if (!share) return;
-  if (share.board.userId !== found.userId && found.membership.role !== 'owner') {
+  if (share.tracker.userId !== found.userId && found.membership.role !== 'owner') {
     return res.status(403).json({ error: 'Solo su dueño o quien administra el grupo pueden quitarlo' });
   }
 
@@ -260,20 +269,20 @@ export async function unshareBoard(req, res) {
   res.json(await groupDetail(found.group.id, found.userId));
 }
 
-// "Unirme": recibe la copia del tablero (ver sharing.js)
-export async function joinBoard(req, res) {
+// "Unirme": recibe la copia del seguimiento (ver sharing.js)
+export async function joinTracker(req, res) {
   const found = await findMembership(req, res);
   if (!found) return;
   const share = await findShare(req, res, found.group.id);
   if (!share) return;
-  if (share.board.userId === found.userId) return res.status(400).json({ error: 'Es tu tablero: ya participás' });
+  if (share.tracker.userId === found.userId) return res.status(400).json({ error: 'Es tu seguimiento: ya participás' });
 
   const already = await prisma.shareJoin.findUnique({ where: { shareId_userId: { shareId: share.id, userId: found.userId } } });
   if (!already) await prisma.$transaction(tx => joinShare(tx, share, found.userId));
   res.status(already ? 200 : 201).json(await groupDetail(found.group.id, found.userId));
 }
 
-export async function leaveBoard(req, res) {
+export async function leaveTracker(req, res) {
   const found = await findMembership(req, res);
   if (!found) return;
   const share = await findShare(req, res, found.group.id);
@@ -283,60 +292,69 @@ export async function leaveBoard(req, res) {
   res.json(await groupDetail(found.group.id, found.userId));
 }
 
-// Ranking de un tablero compartido: por cada seguimiento, el resumen de cada
-// participante (el dueño con el original, los demás con su copia). Solo
-// valores y fechas: las notas son privadas. Con límite semanal, cuentan solo
-// los primeros N registros de cada semana. El orden lo elige la vista.
+// Ranking de un seguimiento compartido, por participante (el dueño con el
+// original, los demás con su copia):
+//   - activity: tareas hechas en todo el seguimiento (ej. todo el gimnasio)
+//   - items: por cada ítem, el resumen de valores y la actividad de ese ítem
+// Solo números: nunca títulos, notas ni fechas. Con límite semanal, cuentan los
+// primeros N de cada semana. El orden lo elige la vista.
 export async function getRanking(req, res) {
   const found = await findMembership(req, res);
   if (!found) return;
   const share = await findShare(req, res, found.group.id);
   if (!share) return;
+  const { weeklyLimit } = found.group;
 
   const ENTRIES = { select: { date: true, value: true }, orderBy: [{ date: 'asc' }, { id: 'asc' }] };
   const joins = await prisma.shareJoin.findMany({ where: { shareId: share.id }, include: { user: USER_PUBLIC } });
-  const owner = await prisma.user.findUnique({ where: { id: share.board.userId }, ...USER_PUBLIC });
-  const sources = await prisma.tracker.findMany({
-    where: { boardId: share.board.id },
+  const owner = await prisma.user.findUnique({ where: { id: share.tracker.userId }, ...USER_PUBLIC });
+  const sourceItems = await prisma.trackerItem.findMany({
+    where: { trackerId: share.tracker.id },
     orderBy: { name: 'asc' },
     include: { entries: ENTRIES }
   });
   const copies = await prisma.tracker.findMany({
-    where: { sourceTrackerId: { in: sources.map(t => t.id) }, userId: { in: joins.map(j => j.userId) } },
-    include: { entries: ENTRIES }
+    where: { sourceTrackerId: share.tracker.id, userId: { in: joins.map(j => j.userId) } },
+    include: { items: { include: { entries: ENTRIES } } }
   });
 
-  // Actividad: solo la cantidad de tareas hechas (nunca títulos ni fechas),
-  // con el mismo límite semanal que los registros
-  const activity = await activityByTracker(prisma, [...sources, ...copies].map(t => t.id));
+  // Seguimiento de cada participante: el original para el dueño, la copia para los demás
+  const participants = [
+    { user: owner, trackerId: share.tracker.id, items: sourceItems, itemFor: (source) => source },
+    ...joins.flatMap(({ user }) => {
+      const copy = copies.find(c => c.userId === user.id);
+      return copy
+        ? [{ user, trackerId: copy.id, items: copy.items, itemFor: (source) => copy.items.find(i => i.sourceItemId === source.id) }]
+        : [];
+    })
+  ];
 
-  const row = (user, tracker) => {
-    const { weeklyLimit } = found.group;
-    const entries = limitPerWeek(tracker.entries, weeklyLimit);
-    return {
-      user,
-      isMe: user.id === found.userId,
-      summary: trackerSummary(entries, tracker.higherIsBetter),
-      activity: cappedActivityTotal(activity.get(tracker.id), weeklyLimit)
-    };
-  };
+  const trackerActivity = await activityBy(prisma, 'trackerId', participants.map(p => p.trackerId));
+  const itemActivity = await activityBy(prisma, 'itemId', participants.flatMap(p => p.items.map(i => i.id)));
+  const isMe = (user) => user.id === found.userId;
 
   res.json({
-    board: { id: share.board.id, name: share.board.name },
-    weeklyLimit: found.group.weeklyLimit,
-    trackers: sources.map(source => ({
+    tracker: { id: share.tracker.id, name: share.tracker.name, itemLabel: share.tracker.itemLabel },
+    weeklyLimit,
+    activity: participants.map(p => ({
+      user: p.user, isMe: isMe(p.user), activity: cappedActivityTotal(trackerActivity.get(p.trackerId), weeklyLimit)
+    })),
+    items: sourceItems.map(source => ({
       id: source.id,
       name: source.name,
       unit: source.unit,
       kind: source.kind,
       higherIsBetter: source.higherIsBetter,
-      rows: [
-        row(owner, source),
-        ...joins.flatMap(({ user }) => {
-          const copy = copies.find(c => c.sourceTrackerId === source.id && c.userId === user.id);
-          return copy ? [row(user, copy)] : [];
-        })
-      ]
+      rows: participants.flatMap(p => {
+        const item = p.itemFor(source);
+        if (!item) return [];
+        return [{
+          user: p.user,
+          isMe: isMe(p.user),
+          summary: trackerSummary(limitPerWeek(item.entries, weeklyLimit), item.higherIsBetter),
+          activity: cappedActivityTotal(itemActivity.get(item.id), weeklyLimit)
+        }];
+      })
     }))
   });
 }

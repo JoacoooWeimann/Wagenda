@@ -1,14 +1,47 @@
-// Validación de seguimientos y sus registros. Misma forma que tasks.js y
-// goals.js: funciones puras que devuelven { data, fields }.
+// Validación de seguimientos, sus ítems y los registros. Misma forma que
+// tasks.js y goals.js: funciones puras que devuelven { data, fields }.
 import { parseDateOnly } from '../dates.js';
 import { optionalText, requiredText, hasErrors } from './common.js';
 
-export const TRACKER_LIMITS = { name: 40, unit: 10, note: 200, value: 1e9 };
-export const TRACKER_KINDS = ['medicion', 'actividad'];
-export const BOARD_LIMITS = { name: 40, description: 200 };
+export const TRACKER_LIMITS = { name: 40, description: 200, itemLabel: 20, unit: 10, note: 200, value: 1e9 };
+export const ITEM_KINDS = ['medicion', 'actividad'];
 
-// Campos del seguimiento. `partial`: en la edición todos son opcionales.
+const noFieldsError = (data, fields) =>
+  !hasErrors(fields) && Object.keys(data).length === 0 ? 'No hay campos para actualizar' : undefined;
+
+// --- Seguimiento: nombre, descripción y cómo se llaman sus ítems -------------
 function trackerFields(body, { partial }) {
+  const fields = {};
+  const data = {};
+
+  if (!partial || body.name !== undefined) {
+    const name = requiredText(body.name, TRACKER_LIMITS.name, 'name', fields, 'El nombre es obligatorio');
+    if (name !== undefined) data.name = name;
+  }
+
+  if (body.description !== undefined) {
+    const description = optionalText(body.description, TRACKER_LIMITS.description, 'description', fields);
+    if (description !== undefined) data.description = description;
+  }
+
+  // "Ejercicio", "Materia"… (vacío = "Ítem" en la pantalla)
+  if (body.itemLabel !== undefined) {
+    const itemLabel = optionalText(body.itemLabel, TRACKER_LIMITS.itemLabel, 'itemLabel', fields);
+    if (itemLabel !== undefined) data.itemLabel = itemLabel;
+  }
+
+  return { data, fields };
+}
+
+export const validateTrackerCreate = (body = {}) => trackerFields(body, { partial: false });
+
+export function validateTrackerUpdate(body = {}) {
+  const { data, fields } = trackerFields(body, { partial: true });
+  return { data, fields, error: noFieldsError(data, fields) };
+}
+
+// --- Ítem: un ejercicio, una materia… -----------------------------------------
+function itemFields(body, { partial }) {
   const fields = {};
   const data = {};
 
@@ -19,7 +52,7 @@ function trackerFields(body, { partial }) {
 
   // medicion (valores) o actividad (cuenta tareas); si no viene al crear, medición
   if (body.kind !== undefined) {
-    if (TRACKER_KINDS.includes(body.kind)) data.kind = body.kind;
+    if (ITEM_KINDS.includes(body.kind)) data.kind = body.kind;
     else fields.kind = 'Tipo inválido';
   }
 
@@ -33,33 +66,29 @@ function trackerFields(body, { partial }) {
     else fields.higherIsBetter = 'higherIsBetter debe ser true o false';
   }
 
-  // Tablero opcional; null lo saca del tablero. Que sea del usuario lo
-  // verifica el controller (necesita la base).
-  if (body.boardId !== undefined) {
-    if (body.boardId === null || (Number.isInteger(body.boardId) && body.boardId > 0)) data.boardId = body.boardId;
-    else fields.boardId = 'Tablero inválido';
+  // Al editar, se puede pasar a otro seguimiento propio (lo verifica el controller)
+  if (partial && body.trackerId !== undefined) {
+    if (Number.isInteger(body.trackerId) && body.trackerId > 0) data.trackerId = body.trackerId;
+    else fields.trackerId = 'Seguimiento inválido';
   }
 
   return { data, fields };
 }
 
-export const validateTrackerCreate = (body = {}) => trackerFields(body, { partial: false });
+export const validateItemCreate = (body = {}) => itemFields(body, { partial: false });
 
-export function validateTrackerUpdate(body = {}) {
-  const { data, fields } = trackerFields(body, { partial: true });
-  const error = !hasErrors(fields) && Object.keys(data).length === 0 ? 'No hay campos para actualizar' : undefined;
-  return { data, fields, error };
+export function validateItemUpdate(body = {}) {
+  const { data, fields } = itemFields(body, { partial: true });
+  return { data, fields, error: noFieldsError(data, fields) };
 }
 
+// --- Registro de un ítem de medición ------------------------------------------
 // Número finito (no NaN ni Infinity) dentro de un rango razonable
 function parseValue(value, fields) {
   if (typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= TRACKER_LIMITS.value) return value;
   fields.value = 'Debe ser un número';
   return undefined;
 }
-
-// Un registro: { date, value, note? }. Al registrar una sesión el valor es
-// opcional (valueRequired: false): la sesión puede ir sin medición.
 export function validateEntry(body = {}, { valueRequired = true } = {}) {
   const fields = {};
   const data = {};
@@ -82,30 +111,4 @@ export function validateEntry(body = {}, { valueRequired = true } = {}) {
   }
 
   return { data, fields };
-}
-
-// Tablero: nombre y descripción opcional. `partial`: en la edición todo es opcional.
-function boardFields(body, { partial }) {
-  const fields = {};
-  const data = {};
-
-  if (!partial || body.name !== undefined) {
-    const name = requiredText(body.name, BOARD_LIMITS.name, 'name', fields, 'El nombre es obligatorio');
-    if (name !== undefined) data.name = name;
-  }
-
-  if (body.description !== undefined) {
-    const description = optionalText(body.description, BOARD_LIMITS.description, 'description', fields);
-    if (description !== undefined) data.description = description;
-  }
-
-  return { data, fields };
-}
-
-export const validateBoardCreate = (body = {}) => boardFields(body, { partial: false });
-
-export function validateBoardUpdate(body = {}) {
-  const { data, fields } = boardFields(body, { partial: true });
-  const error = !hasErrors(fields) && Object.keys(data).length === 0 ? 'No hay campos para actualizar' : undefined;
-  return { data, fields, error };
 }

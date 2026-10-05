@@ -1,4 +1,4 @@
-// Resumen de un seguimiento, calculado a partir de sus registros (no se guarda:
+// Resumen de un ítem de medición, calculado a partir de sus registros (no se guarda:
 // un dato derivado no se desincroniza). `entries` ordenados por fecha ascendente.
 //   - last: el registro más reciente
 //   - best: la mejor marca, según higherIsBetter (en empate, la primera vez que se logró)
@@ -36,20 +36,22 @@ export function limitPerWeek(entries, limit) {
   });
 }
 
-// Actividad de un seguimiento: cuántas tareas vinculadas se hicieron cada día,
-// como [{ date, count }] (solo fechas y cantidades). La fecha es la de la
-// tarea: su fin, el día en que tenía que estar hecha. Los rangos de semanas
-// los arma el cliente, que es quien sabe qué día es hoy.
-export async function activityByTracker(prisma, trackerIds) {
+// Actividad: cuántas tareas vinculadas se hicieron cada día, como
+// [{ date, count }] (solo fechas y cantidades), por seguimiento o por ítem
+// según `field` ('trackerId' o 'itemId'). La fecha es la de la tarea: su fin,
+// el día en que tenía que estar hecha. Las semanas las arma el cliente, que es
+// quien sabe qué día es hoy. Una tarea con ítem también tiene su seguimiento,
+// así la actividad del seguimiento incluye la de todos sus ítems.
+export async function activityBy(prisma, field, ids) {
   const rows = await prisma.task.groupBy({
-    by: ['trackerId', 'endDate'],
-    where: { trackerId: { in: trackerIds }, done: true },
+    by: [field, 'endDate'],
+    where: { [field]: { in: ids }, done: true },
     _count: { _all: true },
     orderBy: { endDate: 'asc' }
   });
-  const byTracker = new Map(trackerIds.map(id => [id, []]));
-  for (const row of rows) byTracker.get(row.trackerId).push({ date: row.endDate, count: row._count._all });
-  return byTracker;
+  const byId = new Map(ids.map(id => [id, []]));
+  for (const row of rows) byId.get(row[field]).push({ date: row.endDate, count: row._count._all });
+  return byId;
 }
 
 // Total de tareas hechas con el límite semanal de un grupo: de cada semana

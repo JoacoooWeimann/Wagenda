@@ -15,12 +15,26 @@ import {
 
 const TASK_NOT_FOUND = 'Tarea no encontrada';
 
-// Una tarea solo suma a un seguimiento propio (puede ser la copia de uno
-// compartido: es suyo). Devuelve los errores por campo, o null.
-async function trackerError(trackerId, userId) {
-  if (!trackerId) return null;
-  const tracker = await prisma.tracker.findFirst({ where: { id: trackerId, userId } });
-  return tracker ? null : { trackerId: 'Seguimiento no encontrado' };
+// Seguimiento e ítem de una tarea. El ítem manda: si viene, el seguimiento es
+// el suyo (y si además vino otro seguimiento, es un error). Si cambia el
+// seguimiento sin ítem, el ítem anterior (de otro seguimiento) se quita.
+// Todo tiene que ser del usuario (puede ser la copia de uno compartido: es suya).
+// Completa `data` y devuelve los errores por campo, o null.
+async function resolveTracker(data, userId, current = {}) {
+  if (data.itemId) {
+    const item = await prisma.trackerItem.findFirst({ where: { id: data.itemId, userId } });
+    if (!item) return { itemId: 'Ítem no encontrado' };
+    if (data.trackerId && data.trackerId !== item.trackerId) return { itemId: 'El ítem no es de ese seguimiento' };
+    data.trackerId = item.trackerId;
+    return null;
+  }
+  if (data.trackerId) {
+    const tracker = await prisma.tracker.findFirst({ where: { id: data.trackerId, userId } });
+    if (!tracker) return { trackerId: 'Seguimiento no encontrado' };
+    if (data.itemId === undefined && current.trackerId !== data.trackerId) data.itemId = null;
+  }
+  if (data.trackerId === null) data.itemId = null; // sin seguimiento no hay ítem
+  return null;
 }
 
 export async function getTasksForMonth(req, res) {
@@ -50,7 +64,7 @@ export async function createTask(req, res) {
   if (hasErrors(fields)) return invalid(res, fields);
 
   const userId = currentUserId(req);
-  const badTracker = await trackerError(data.trackerId, userId);
+  const badTracker = await resolveTracker(data, userId);
   if (badTracker) return invalid(res, badTracker);
 
   const task = await prisma.task.create({
@@ -98,7 +112,7 @@ export async function updateTask(req, res) {
     include: { goalWeek: { include: { goal: true } } }
   });
   if (!current) return notFound(res, TASK_NOT_FOUND);
-  const badTracker = await trackerError(data.trackerId, current.userId);
+  const badTracker = await resolveTracker(data, current.userId, current);
   if (badTracker) return invalid(res, badTracker);
 
   // Si el PATCH trae una sola fecha, la otra sale de lo guardado

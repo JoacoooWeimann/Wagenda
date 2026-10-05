@@ -41,17 +41,26 @@ async function friendsGroup(extra = {}) {
   return group;
 }
 
-// Tablero "Gimnasio" de joaco con press banca y sentadilla, compartido en el grupo
+// Seguimiento "Gimnasio" de joaco con press banca y sentadilla, compartido en el grupo
 async function sharedGym(group) {
-  const board = await ok(as(joaco).post('/api/boards', { name: 'Gimnasio' }), 201);
-  const bench = await ok(as(joaco).post('/api/trackers', { name: 'Press banca', unit: 'kg', boardId: board.id }), 201);
-  const squat = await ok(as(joaco).post('/api/trackers', { name: 'Sentadilla', unit: 'kg', boardId: board.id }), 201);
-  const detail = await ok(as(joaco).post(`/api/groups/${group.id}/shares`, { boardId: board.id }), 201);
-  return { board, bench, squat, share: detail.shares[0] };
+  const gym = await ok(as(joaco).post('/api/trackers', { name: 'Gimnasio', itemLabel: 'Ejercicio' }), 201);
+  await ok(as(joaco).post(`/api/trackers/${gym.id}/items`, { name: 'Press banca', unit: 'kg' }), 201);
+  const full = await ok(as(joaco).post(`/api/trackers/${gym.id}/items`, { name: 'Sentadilla', unit: 'kg' }), 201);
+  const [bench, squat] = full.items;
+  const detail = await ok(as(joaco).post(`/api/groups/${group.id}/shares`, { trackerId: gym.id }), 201);
+  return { gym, bench, squat, share: detail.shares[0] };
 }
 
-// La copia que tiene un usuario de un seguimiento original
-const copyOf = (user, sourceId) => ctx.prisma.tracker.findFirst({ where: { userId: user.id, sourceTrackerId: sourceId } });
+// La copia que tiene un usuario de un seguimiento o de un ítem original
+const trackerCopy = (user, sourceId) => ctx.prisma.tracker.findFirst({ where: { userId: user.id, sourceTrackerId: sourceId } });
+const copyOf = (user, sourceItemId) => ctx.prisma.trackerItem.findFirst({ where: { userId: user.id, sourceItemId } });
+const joinShare = (user, group, share) => ok(as(user).post(`/api/groups/${group.id}/shares/${share.id}/join`), 201);
+const entry = (user, itemId, date, value) =>
+  ok(as(user).post(`/api/items/${itemId}/entries`, { date, value, note: 'privada' }), 201);
+const doneTask = async (user, body, title = 'Rutina') => {
+  const t = await ok(as(user).post('/api/tasks', { title, ...body }), 201);
+  await ok(as(user).patch(`/api/tasks/${t.id}`, { done: true }));
+};
 
 describe('grupos', () => {
   it('se crea, se entra con el código y solo los miembros lo ven', async () => {
@@ -101,176 +110,159 @@ describe('grupos', () => {
   });
 });
 
-describe('tableros compartidos', () => {
-  it('compartir no expone a nadie: cada uno elige unirse y recibe su copia', async () => {
+describe('seguimientos compartidos', () => {
+  it('compartir no expone a nadie: cada uno elige unirse y recibe su copia con los ítems', async () => {
     const group = await friendsGroup();
-    const { bench, share } = await sharedGym(group);
+    const { gym, bench, share } = await sharedGym(group);
     assert.equal(share.participants, 1); // solo el dueño
+    assert.deepEqual(share.tracker.items, ['Press banca', 'Sentadilla']);
 
-    const joined = await ok(as(lucia).post(`/api/groups/${group.id}/shares/${share.id}/join`), 201);
+    const joined = await joinShare(lucia, group, share);
     assert.equal(joined.shares[0].joined, true);
     assert.equal(joined.shares[0].participants, 2);
 
-    const [luciaBoard] = await ok(as(lucia).get('/api/boards'));
-    assert.equal(luciaBoard.name, 'Gimnasio');
-    assert.deepEqual(luciaBoard.sharedBy, { name: 'Joaco', username: 'joaco' });
-    const luciaBench = await copyOf(lucia, bench.id);
-    assert.equal(luciaBench.unit, 'kg');
-    assert.equal(luciaBench.boardId, luciaBoard.id);
+    const [luciaGym] = await ok(as(lucia).get('/api/trackers'));
+    assert.deepEqual([luciaGym.name, luciaGym.itemLabel], ['Gimnasio', 'Ejercicio']);
+    assert.deepEqual(luciaGym.sharedBy, { name: 'Joaco', username: 'joaco' });
+    assert.equal(luciaGym.sourceTrackerId, gym.id);
+    assert.equal((await copyOf(lucia, bench.id)).unit, 'kg');
 
-    // tomi no se unió: no tiene nada
-    assert.deepEqual(await ok(as(tomi).get('/api/trackers')), []);
+    assert.deepEqual(await ok(as(tomi).get('/api/trackers')), []); // tomi no se unió
   });
 
-  it('el ranking muestra a los que participan, sin notas y con el límite semanal', async () => {
+  it('el ranking muestra a los que participan: actividad del seguimiento y de cada ítem, sin notas y con el límite', async () => {
     const group = await friendsGroup({ weeklyLimit: 2 });
-    const { bench, share } = await sharedGym(group);
-    await ok(as(lucia).post(`/api/groups/${group.id}/shares/${share.id}/join`), 201);
+    const { gym, bench, share } = await sharedGym(group);
+    await joinShare(lucia, group, share);
     const luciaBench = await copyOf(lucia, bench.id);
+    const luciaGym = await trackerCopy(lucia, gym.id);
 
-    const entry = (user, id, date, value) => ok(as(user).post(`/api/trackers/${id}/entries`, { date, value, note: 'privada' }), 201);
     await entry(joaco, bench.id, '2026-10-05', 80);
     await entry(lucia, luciaBench.id, '2026-10-05', 50);
     await entry(lucia, luciaBench.id, '2026-10-06', 55);
     await entry(lucia, luciaBench.id, '2026-10-07', 200); // tercero de la semana: el grupo no lo cuenta
-    await entry(lucia, luciaBench.id, '2026-10-12', 60);  // semana siguiente: sí
+    await entry(lucia, luciaBench.id, '2026-10-12', 60);
+
+    await doneTask(joaco, { startDate: '2026-10-05', itemId: bench.id }, 'Pecho secreto');
+    for (const d of ['2026-10-05', '2026-10-06', '2026-10-07']) await doneTask(lucia, { startDate: d, trackerId: luciaGym.id }); // 3: cuentan 2
+    await doneTask(lucia, { startDate: '2026-10-12', itemId: luciaBench.id });
 
     const ranking = await ok(as(tomi).get(`/api/groups/${group.id}/shares/${share.id}/ranking`));
-    assert.equal(ranking.weeklyLimit, 2);
-    const benchRows = ranking.trackers.find(t => t.name === 'Press banca').rows;
-    assert.deepEqual(benchRows.map(r => [r.user.username, r.summary.best?.value, r.summary.count]), [
-      ['joaco', 80, 1],
-      ['lucia', 60, 3]
+    assert.deepEqual(ranking.tracker, { id: gym.id, name: 'Gimnasio', itemLabel: 'Ejercicio' });
+    assert.deepEqual(ranking.activity.map(r => [r.user.username, r.activity]), [['joaco', 1], ['lucia', 3]]);
+
+    const benchRows = ranking.items.find(i => i.name === 'Press banca').rows;
+    assert.deepEqual(benchRows.map(r => [r.user.username, r.summary.best?.value, r.summary.count, r.activity]), [
+      ['joaco', 80, 1, 1],
+      ['lucia', 60, 3, 1]
     ]);
-    assert.ok(!JSON.stringify(ranking).includes('privada'));
-    assert.deepEqual(benchRows.map(r => r.activity), [0, 0]); // todavía sin tareas vinculadas
-    // lucia en su cuenta ve todo: el límite es solo de lo que ve el grupo
-    assert.equal((await ok(as(lucia).get(`/api/trackers/${luciaBench.id}`))).summary.best.value, 200);
+    // De las tareas solo viaja la cantidad: ni títulos ni fechas. De los registros, nunca la nota.
+    const text = JSON.stringify(ranking);
+    assert.ok(!text.includes('privada') && !text.includes('Pecho secreto') && !text.includes('Rutina'));
+    assert.deepEqual(Object.keys(ranking.activity[0]).sort(), ['activity', 'isMe', 'user']);
+    assert.equal(typeof benchRows[0].activity, 'number');
+    // en su cuenta, lucia ve todo: el límite es solo de lo que ve el grupo
+    const mine = await ok(as(lucia).get(`/api/trackers/${luciaGym.id}`));
+    assert.equal(mine.items.find(i => i.id === luciaBench.id).summary.best.value, 200);
   });
 
-  it('los cambios del dueño se replican; las copias no se editan', async () => {
+  it('los cambios del dueño se replican; las copias no se editan pero se usan', async () => {
     const group = await friendsGroup();
-    const { board, bench, share } = await sharedGym(group);
-    await ok(as(lucia).post(`/api/groups/${group.id}/shares/${share.id}/join`), 201);
+    const { gym, bench, share } = await sharedGym(group);
+    await joinShare(lucia, group, share);
 
-    await ok(as(joaco).patch(`/api/trackers/${bench.id}`, { name: 'Press plano', unit: 'lb' }));
-    await ok(as(joaco).post('/api/trackers', { name: 'Peso muerto', unit: 'kg', boardId: board.id }), 201);
-    await ok(as(joaco).patch(`/api/boards/${board.id}`, { name: 'Gym' }));
+    await ok(as(joaco).patch(`/api/items/${bench.id}`, { name: 'Press plano', unit: 'lb' }));
+    await ok(as(joaco).post(`/api/trackers/${gym.id}/items`, { name: 'Cardio', kind: 'actividad' }), 201);
+    await ok(as(joaco).patch(`/api/trackers/${gym.id}`, { name: 'Gym', itemLabel: 'Máquina' }));
 
-    const luciaTrackers = await ok(as(lucia).get('/api/trackers'));
-    assert.deepEqual(luciaTrackers.map(t => [t.name, t.unit]), [['Peso muerto', 'kg'], ['Press plano', 'lb'], ['Sentadilla', 'kg']]);
-    assert.equal((await ok(as(lucia).get('/api/boards')))[0].name, 'Gym');
+    const [copy] = await ok(as(lucia).get('/api/trackers'));
+    assert.deepEqual([copy.name, copy.itemLabel], ['Gym', 'Máquina']);
+    assert.deepEqual(copy.items.map(i => [i.name, i.kind, i.unit]), [
+      ['Cardio', 'actividad', null], ['Press plano', 'medicion', 'lb'], ['Sentadilla', 'medicion', 'kg']
+    ]);
 
-    const copy = luciaTrackers[1];
+    const copyItem = copy.items[1];
     assert.equal((await as(lucia).patch(`/api/trackers/${copy.id}`, { name: 'Mío' })).status, 400);
-    assert.equal((await as(lucia).del(`/api/trackers/${copy.id}`)).status, 400);
-    assert.equal((await as(lucia).post('/api/trackers', { name: 'Extra', boardId: copy.boardId })).status, 400);
-    assert.equal((await as(lucia).patch(`/api/boards/${copy.boardId}`, { name: 'Mío' })).status, 400);
-    // pero sí carga sus registros
-    await ok(as(lucia).post(`/api/trackers/${copy.id}/entries`, { date: '2026-10-05', value: 100 }), 201);
+    assert.equal((await as(lucia).post(`/api/trackers/${copy.id}/items`, { name: 'Extra' })).status, 400);
+    assert.equal((await as(lucia).patch(`/api/items/${copyItem.id}`, { name: 'Mío' })).status, 400);
+    assert.equal((await as(lucia).del(`/api/items/${copyItem.id}`)).status, 400);
+    // pero carga registros y vincula tareas
+    await entry(lucia, copyItem.id, '2026-10-05', 100);
+    await doneTask(lucia, { startDate: '2026-10-05', itemId: copyItem.id });
   });
 
-  it('al salir, las copias quedan como personales con su historial', async () => {
+  it('al salir, la copia queda como personal con su historial', async () => {
     const group = await friendsGroup();
-    const { bench, share } = await sharedGym(group);
-    await ok(as(lucia).post(`/api/groups/${group.id}/shares/${share.id}/join`), 201);
-    const copy = await copyOf(lucia, bench.id);
-    await ok(as(lucia).post(`/api/trackers/${copy.id}/entries`, { date: '2026-10-05', value: 50 }), 201);
+    const { gym, bench, share } = await sharedGym(group);
+    await joinShare(lucia, group, share);
+    const copyItem = await copyOf(lucia, bench.id);
+    await entry(lucia, copyItem.id, '2026-10-05', 50);
 
     const after = await ok(as(lucia).del(`/api/groups/${group.id}/shares/${share.id}/join`));
     assert.equal(after.shares[0].joined, false);
 
-    const detached = await ctx.prisma.tracker.findUnique({ where: { id: copy.id }, include: { entries: true, board: true } });
-    assert.equal(detached.sourceTrackerId, null);
-    assert.equal(detached.board.sourceBoardId, null);
+    const detached = await ctx.prisma.trackerItem.findUnique({ where: { id: copyItem.id }, include: { entries: true, tracker: true } });
+    assert.equal(detached.sourceItemId, null);
+    assert.equal(detached.tracker.sourceTrackerId, null);
     assert.equal(detached.entries.length, 1);
-    // ya es suyo: lo puede editar
-    await ok(as(lucia).patch(`/api/trackers/${copy.id}`, { name: 'Mi press' }));
+    await ok(as(lucia).patch(`/api/items/${copyItem.id}`, { name: 'Mi press' })); // ya es suyo
+    assert.equal(await trackerCopy(lucia, gym.id), null);
   });
 
   it('unido en dos grupos: una sola copia, y sigue vinculada hasta salir de ambos', async () => {
     const group = await friendsGroup();
-    const { bench, board, share } = await sharedGym(group);
+    const { gym, bench, share } = await sharedGym(group);
     const other = await ok(as(joaco).post('/api/groups', { name: 'Facultad' }), 201);
     await ok(as(lucia).post('/api/groups/join', { code: other.inviteCode }), 201);
-    const otherShare = (await ok(as(joaco).post(`/api/groups/${other.id}/shares`, { boardId: board.id }), 201)).shares[0];
+    const otherShare = (await ok(as(joaco).post(`/api/groups/${other.id}/shares`, { trackerId: gym.id }), 201)).shares[0];
 
-    await ok(as(lucia).post(`/api/groups/${group.id}/shares/${share.id}/join`), 201);
-    await ok(as(lucia).post(`/api/groups/${other.id}/shares/${otherShare.id}/join`), 201);
-    assert.equal(await ctx.prisma.tracker.count({ where: { userId: lucia.id, sourceTrackerId: bench.id } }), 1);
+    await joinShare(lucia, group, share);
+    await joinShare(lucia, other, otherShare);
+    assert.equal(await ctx.prisma.tracker.count({ where: { userId: lucia.id, sourceTrackerId: gym.id } }), 1);
 
     await ok(as(lucia).del(`/api/groups/${group.id}/members/me`));
-    assert.ok((await copyOf(lucia, bench.id)), 'sigue vinculada por el otro grupo');
+    assert.ok(await copyOf(lucia, bench.id), 'sigue vinculada por el otro grupo');
 
     await ok(as(lucia).del(`/api/groups/${other.id}/shares/${otherShare.id}/join`));
     assert.equal(await copyOf(lucia, bench.id), null);
   });
 
-  it('expulsar o borrar el original desvincula; el administrador puede quitar un tablero ajeno', async () => {
+  it('expulsar, borrar un ítem o el original desvincula; el administrador puede quitar uno ajeno', async () => {
     const group = await friendsGroup();
-    const { board, bench, share } = await sharedGym(group);
-    await ok(as(lucia).post(`/api/groups/${group.id}/shares/${share.id}/join`), 201);
-    await ok(as(tomi).post(`/api/groups/${group.id}/shares/${share.id}/join`), 201);
+    const { gym, bench, squat, share } = await sharedGym(group);
+    await joinShare(lucia, group, share);
+    await joinShare(tomi, group, share);
 
     assert.equal((await as(lucia).del(`/api/groups/${group.id}/members/${tomi.id}`)).status, 403);
     const afterKick = await ok(as(joaco).del(`/api/groups/${group.id}/members/${tomi.id}`));
     assert.deepEqual(afterKick.members.map(m => m.username), ['joaco', 'lucia']);
     assert.equal(await copyOf(tomi, bench.id), null);
-    assert.equal(await ctx.prisma.tracker.count({ where: { userId: tomi.id } }), 2); // conserva sus seguimientos
+    assert.equal(await ctx.prisma.trackerItem.count({ where: { userId: tomi.id } }), 2); // conserva sus ítems
 
-    await ok(as(joaco).del(`/api/boards/${board.id}`));
+    // borrar un ítem del original: la copia de lucia queda como ítem suyo
+    const luciaSquat = await copyOf(lucia, squat.id);
+    await ok(as(joaco).del(`/api/items/${squat.id}`));
+    assert.equal((await ctx.prisma.trackerItem.findUnique({ where: { id: luciaSquat.id } })).sourceItemId, null);
+
+    await ok(as(joaco).del(`/api/trackers/${gym.id}`));
     assert.equal(await copyOf(lucia, bench.id), null);
-    assert.equal(await ctx.prisma.boardShare.count(), 0);
+    assert.equal(await ctx.prisma.trackerShare.count(), 0);
 
-    // tablero de lucia, quitado por el administrador
-    const luciaBoard = await ok(as(lucia).post('/api/boards', { name: 'CS2' }), 201);
-    const shared = await ok(as(lucia).post(`/api/groups/${group.id}/shares`, { boardId: luciaBoard.id }), 201);
+    const luciaCs = await ok(as(lucia).post('/api/trackers', { name: 'CS2' }), 201);
+    const shared = await ok(as(lucia).post(`/api/groups/${group.id}/shares`, { trackerId: luciaCs.id }), 201);
     assert.equal((await as(tomi).del(`/api/groups/${group.id}/shares/${shared.shares[0].id}`)).status, 404); // ya no es miembro
-    const moderated = await ok(as(joaco).del(`/api/groups/${group.id}/shares/${shared.shares[0].id}`));
-    assert.deepEqual(moderated.shares, []);
+    assert.deepEqual((await ok(as(joaco).del(`/api/groups/${group.id}/shares/${shared.shares[0].id}`))).shares, []);
   });
 
-  it('no se comparte una copia, un tablero ajeno ni dos veces el mismo', async () => {
+  it('no se comparte una copia, uno ajeno ni dos veces el mismo', async () => {
     const group = await friendsGroup();
-    const { board, share } = await sharedGym(group);
-    await ok(as(lucia).post(`/api/groups/${group.id}/shares/${share.id}/join`), 201);
-    const [luciaCopy] = await ok(as(lucia).get('/api/boards'));
+    const { gym, share } = await sharedGym(group);
+    await joinShare(lucia, group, share);
+    const luciaCopy = await trackerCopy(lucia, gym.id);
 
-    assert.ok((await as(lucia).post(`/api/groups/${group.id}/shares`, { boardId: luciaCopy.id })).body.fields.boardId);
-    assert.ok((await as(lucia).post(`/api/groups/${group.id}/shares`, { boardId: board.id })).body.fields.boardId);
-    assert.ok((await as(joaco).post(`/api/groups/${group.id}/shares`, { boardId: board.id })).body.fields.boardId);
+    assert.ok((await as(lucia).post(`/api/groups/${group.id}/shares`, { trackerId: luciaCopy.id })).body.fields.trackerId);
+    assert.ok((await as(lucia).post(`/api/groups/${group.id}/shares`, { trackerId: gym.id })).body.fields.trackerId);
+    assert.ok((await as(joaco).post(`/api/groups/${group.id}/shares`, { trackerId: gym.id })).body.fields.trackerId);
     assert.equal((await as(joaco).post(`/api/groups/${group.id}/shares/${share.id}/join`)).status, 400); // es suyo
-  });
-});
-
-describe('actividad en el ranking', () => {
-  it('cuenta solo la cantidad de tareas hechas, con el límite semanal y sin títulos', async () => {
-    const group = await friendsGroup({ weeklyLimit: 2 });
-    const { bench, share } = await sharedGym(group);
-    await ok(as(lucia).post(`/api/groups/${group.id}/shares/${share.id}/join`), 201);
-    const luciaBench = await copyOf(lucia, bench.id);
-
-    const doneTask = async (user, trackerId, date, title) => {
-      const t = await ok(as(user).post('/api/tasks', { title, startDate: date, trackerId }), 201);
-      await ok(as(user).patch(`/api/tasks/${t.id}`, { done: true }));
-    };
-    await doneTask(joaco, bench.id, '2026-10-05', 'Pecho secreto');
-    for (const d of ['2026-10-05', '2026-10-06', '2026-10-07']) await doneTask(lucia, luciaBench.id, d, 'Rutina'); // 3 en la semana: cuentan 2
-    await doneTask(lucia, luciaBench.id, '2026-10-12', 'Rutina');
-
-    const ranking = await ok(as(tomi).get(`/api/groups/${group.id}/shares/${share.id}/ranking`));
-    const rows = ranking.trackers.find(t => t.name === 'Press banca').rows;
-    assert.deepEqual(rows.map(r => [r.user.username, r.activity]), [['joaco', 1], ['lucia', 3]]);
-    assert.ok(!JSON.stringify(ranking).includes('Pecho secreto'));
-    assert.ok(!JSON.stringify(ranking).includes('2026-10-0'));
-  });
-
-  it('las copias reciben el tipo del original', async () => {
-    const group = await friendsGroup();
-    const board = await ok(as(joaco).post('/api/boards', { name: 'Facu' }), 201);
-    const source = await ok(as(joaco).post('/api/trackers', { name: 'Estudio', kind: 'actividad', boardId: board.id }), 201);
-    const share = (await ok(as(joaco).post(`/api/groups/${group.id}/shares`, { boardId: board.id }), 201)).shares[0];
-    await ok(as(lucia).post(`/api/groups/${group.id}/shares/${share.id}/join`), 201);
-    assert.equal((await copyOf(lucia, source.id)).kind, 'actividad');
   });
 });

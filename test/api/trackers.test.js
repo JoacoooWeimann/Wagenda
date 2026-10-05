@@ -7,260 +7,222 @@ before(async () => { ctx = await startTestServer(); });
 after(async () => { await ctx.stop(); });
 beforeEach(async () => { await ctx.reset(); });
 
-async function createTracker(body = { name: 'Press banca', unit: 'kg' }) {
-  const res = await ctx.request('POST', '/api/trackers', body);
-  assert.equal(res.status, 201, JSON.stringify(res.body));
+async function ok(promise, status = 200) {
+  const res = await promise;
+  assert.equal(res.status, status, JSON.stringify(res.body));
   return res.body;
 }
-const addEntry = (tracker, date, value, extra = {}) =>
-  ctx.request('POST', `/api/trackers/${tracker.id}/entries`, { date, value, ...extra });
+
+const createTracker = (body = { name: 'Gimnasio', itemLabel: 'Ejercicio' }) =>
+  ok(ctx.request('POST', '/api/trackers', body), 201);
+// Agrega un ítem y devuelve el ítem (la API devuelve el seguimiento completo)
+async function addItem(tracker, body = { name: 'Press banca', unit: 'kg' }) {
+  const updated = await ok(ctx.request('POST', `/api/trackers/${tracker.id}/items`, body), 201);
+  return updated.items.find(i => i.name === body.name.trim());
+}
+const addEntry = (item, date, value, extra = {}) =>
+  ctx.request('POST', `/api/items/${item.id}/entries`, { date, value, ...extra });
 
 const running = (extra = {}) => ({
   title: 'Fuerza', type: 'fisico', strategy: 'fases',
   startDate: '2026-10-05', deadline: '2026-11-29', sessionsPerWeek: 3, ...extra
 });
 
-describe('seguimientos', () => {
-  it('crea, lista con resumen, edita y borra', async () => {
-    const tracker = await createTracker();
-    assert.equal(tracker.higherIsBetter, true);
-    assert.deepEqual(tracker.summary, { count: 0, last: null, best: null, change: null });
+describe('seguimientos (áreas)', () => {
+  it('se crea, se lista con sus ítems, se edita y se borra con sus ítems y registros', async () => {
+    const gym = await createTracker({ name: 'Gimnasio', description: 'Fuerza', itemLabel: 'Ejercicio' });
+    assert.deepEqual([gym.name, gym.itemLabel, gym.items, gym.activity, gym.sharedBy], ['Gimnasio', 'Ejercicio', [], [], null]);
 
-    await addEntry(tracker, '2026-10-05', 80);
-    await addEntry(tracker, '2026-10-19', 85, { note: 'nuevo récord' });
-    await addEntry(tracker, '2026-10-12', 82.5); // se carga fuera de orden
+    const bench = await addItem(gym);
+    await addItem(gym, { name: 'Cardio', kind: 'actividad' });
+    await ok(addEntry(bench, '2026-10-05', 80), 201);
 
-    const [listed] = (await ctx.request('GET', '/api/trackers')).body;
-    assert.deepEqual(listed.entries.map(e => e.value), [80, 82.5, 85]); // orden cronológico
-    assert.equal(listed.summary.best.value, 85);
-    assert.equal(listed.summary.change, 5);
+    const [listed] = await ok(ctx.request('GET', '/api/trackers'));
+    assert.deepEqual(listed.items.map(i => [i.name, i.kind]), [['Cardio', 'actividad'], ['Press banca', 'medicion']]);
 
-    const edited = await ctx.request('PATCH', `/api/trackers/${tracker.id}`, { name: 'Press plano', unit: '' });
-    assert.equal(edited.body.name, 'Press plano');
-    assert.equal(edited.body.unit, null);
+    const edited = await ok(ctx.request('PATCH', `/api/trackers/${gym.id}`, { name: 'Gym', itemLabel: '' }));
+    assert.equal(edited.name, 'Gym');
+    assert.equal(edited.itemLabel, null);
 
-    assert.equal((await ctx.request('DELETE', `/api/trackers/${tracker.id}`)).status, 200);
-    assert.equal(await ctx.prisma.trackerEntry.count(), 0); // cascade
+    await ok(ctx.request('DELETE', `/api/trackers/${gym.id}`));
+    assert.equal(await ctx.prisma.trackerItem.count(), 0); // cascade: ítems
+    assert.equal(await ctx.prisma.trackerEntry.count(), 0); // y sus registros
   });
 
-  it('con higherIsBetter false, la mejor marca es la menor', async () => {
-    const tracker = await createTracker({ name: '5 km', unit: 'min', higherIsBetter: false });
-    await addEntry(tracker, '2026-10-05', 30);
-    await addEntry(tracker, '2026-10-12', 28);
-    await addEntry(tracker, '2026-10-19', 29);
-    const { body } = await ctx.request('GET', `/api/trackers/${tracker.id}`);
-    assert.equal(body.summary.best.value, 28);
-    assert.equal(body.summary.last.value, 29);
+  it('valida los datos', async () => {
+    const bad = await ctx.request('POST', '/api/trackers', { name: '', itemLabel: 'x'.repeat(21) });
+    assert.deepEqual(Object.keys(bad.body.fields).sort(), ['itemLabel', 'name']);
+    const gym = await createTracker();
+    assert.equal((await ctx.request('PATCH', `/api/trackers/${gym.id}`, {})).status, 400);
   });
 
-  it('valida los datos y borra registros', async () => {
-    const bad = await ctx.request('POST', '/api/trackers', { name: '', boardId: 'x', higherIsBetter: 'si' });
-    assert.equal(bad.status, 400);
-    assert.deepEqual(Object.keys(bad.body.fields).sort(), ['boardId', 'higherIsBetter', 'name']);
-
-    const tracker = await createTracker();
-    const badEntry = await addEntry(tracker, '2026-13-01', 'mucho');
-    assert.deepEqual(Object.keys(badEntry.body.fields).sort(), ['date', 'value']);
-
-    const entry = (await addEntry(tracker, '2026-10-05', 80)).body;
-    assert.equal((await ctx.request('DELETE', `/api/trackers/${tracker.id}/entries/${entry.id}`)).status, 200);
-    assert.equal((await ctx.request('DELETE', `/api/trackers/${tracker.id}/entries/${entry.id}`)).status, 404);
+  it('las opciones para formularios traen seguimientos con sus ítems, sin registros', async () => {
+    const gym = await createTracker();
+    await addItem(gym);
+    await createTracker({ name: 'Facultad', itemLabel: 'Materia' });
+    const options = await ok(ctx.request('GET', '/api/trackers/options'));
+    assert.deepEqual(options.map(o => [o.name, o.items.map(i => i.name)]), [['Facultad', []], ['Gimnasio', ['Press banca']]]);
+    assert.equal('entries' in options[1].items[0], false);
   });
 
   it('los seguimientos de otro usuario no se ven ni se tocan', async () => {
     const other = await ctx.prisma.user.create({ data: { name: 'Otro' } });
     const foreign = await ctx.prisma.tracker.create({ data: { name: 'Ajeno', userId: other.id } });
+    const foreignItem = await ctx.prisma.trackerItem.create({ data: { name: 'Ajeno', userId: other.id, trackerId: foreign.id } });
 
-    assert.deepEqual((await ctx.request('GET', '/api/trackers')).body, []);
+    assert.deepEqual(await ok(ctx.request('GET', '/api/trackers')), []);
     assert.equal((await ctx.request('GET', `/api/trackers/${foreign.id}`)).status, 404);
-    assert.equal((await addEntry(foreign, '2026-10-05', 1)).status, 404);
+    assert.equal((await ctx.request('POST', `/api/trackers/${foreign.id}/items`, { name: 'x' })).status, 404);
+    assert.equal((await addEntry(foreignItem, '2026-10-05', 1)).status, 404);
     assert.equal((await ctx.request('DELETE', `/api/trackers/${foreign.id}`)).status, 404);
-    // tampoco se puede vincular a un objetivo propio
-    const res = await ctx.request('POST', '/api/goals', running({ trackerId: foreign.id }));
-    assert.equal(res.body.fields.trackerId, 'Seguimiento no encontrado');
+    assert.equal((await ctx.request('PATCH', `/api/items/${foreignItem.id}`, { name: 'x' })).status, 404);
   });
 });
 
-describe('objetivos vinculados a un seguimiento', () => {
-  it('la sesión con valor crea también el registro, en la misma fecha', async () => {
-    const tracker = await createTracker();
-    const goal = (await ctx.request('POST', '/api/goals', running({ trackerId: tracker.id }))).body;
-    assert.deepEqual(goal.tracker, { id: tracker.id, name: 'Press banca', unit: 'kg', kind: 'medicion' });
+describe('ítems', () => {
+  it('de medición: registros con resumen (mejor marca según higherIsBetter)', async () => {
+    const gym = await createTracker();
+    const run = await addItem(gym, { name: '5 km', unit: 'min', higherIsBetter: false });
+    for (const [d, v] of [['2026-10-05', 30], ['2026-10-19', 29], ['2026-10-12', 28]]) await ok(addEntry(run, d, v, { note: 'ok' }), 201);
 
-    const res = await ctx.request('POST', `/api/goals/${goal.id}/sessions`, { date: '2026-10-06', value: 82.5, note: 'fácil' });
-    assert.equal(res.status, 201);
-    assert.equal(res.body.kind, 'sesion');
-
-    const [entry] = (await ctx.request('GET', `/api/trackers/${tracker.id}`)).body.entries;
-    assert.equal(entry.value, 82.5);
-    assert.equal(entry.note, 'fácil');
-    assert.equal(entry.date, '2026-10-06T00:00:00.000Z');
-
-    // sin valor, solo la sesión
-    await ctx.request('POST', `/api/goals/${goal.id}/sessions`, { date: '2026-10-07' });
-    assert.equal(await ctx.prisma.trackerEntry.count(), 1);
-    assert.equal(await ctx.prisma.task.count({ where: { kind: 'sesion' } }), 2);
+    const [tracker] = await ok(ctx.request('GET', '/api/trackers'));
+    const item = tracker.items[0];
+    assert.deepEqual(item.entries.map(e => e.value), [30, 28, 29]); // cronológico
+    assert.equal(item.summary.best.value, 28);
+    assert.equal(item.summary.last.value, 29);
   });
 
-  it('sin seguimiento vinculado, el valor se rechaza y no se crea nada', async () => {
-    const goal = (await ctx.request('POST', '/api/goals', running())).body;
-    const res = await ctx.request('POST', `/api/goals/${goal.id}/sessions`, { date: '2026-10-06', value: 80 });
-    assert.equal(res.status, 400);
-    assert.ok(res.body.fields.value);
-    assert.equal(await ctx.prisma.task.count({ where: { kind: 'sesion' } }), 0);
+  it('se edita, se pasa a otro seguimiento y se borra (sus tareas quedan en el seguimiento)', async () => {
+    const gym = await createTracker();
+    const other = await createTracker({ name: 'Running' });
+    const bench = await addItem(gym);
+    const task = await ok(ctx.request('POST', '/api/tasks', { title: 'Pecho', startDate: '2026-10-05', itemId: bench.id }), 201);
+
+    const moved = await ok(ctx.request('PATCH', `/api/items/${bench.id}`, { name: 'Press plano', trackerId: other.id }));
+    assert.equal(moved.id, other.id); // devuelve el seguimiento al que quedó
+    assert.deepEqual(moved.items.map(i => i.name), ['Press plano']);
+
+    await ok(ctx.request('DELETE', `/api/items/${bench.id}`));
+    const after = await ctx.prisma.task.findUnique({ where: { id: task.id } });
+    assert.equal(after.itemId, null);
+    assert.equal(after.trackerId, gym.id); // la tarea guarda el seguimiento que tenía al crearse
   });
 
-  it('se vincula y desvincula al editar; borrar el seguimiento no borra el objetivo', async () => {
-    const tracker = await createTracker();
-    const goal = (await ctx.request('POST', '/api/goals', running())).body;
+  it('valida el ítem y los registros, y borra registros', async () => {
+    const gym = await createTracker();
+    const bad = await ctx.request('POST', `/api/trackers/${gym.id}/items`, { name: '', kind: 'otro', higherIsBetter: 'si' });
+    assert.deepEqual(Object.keys(bad.body.fields).sort(), ['higherIsBetter', 'kind', 'name']);
 
-    const linked = await ctx.request('PATCH', `/api/goals/${goal.id}`, { trackerId: tracker.id });
-    assert.equal(linked.body.tracker.id, tracker.id);
-    const unlinked = await ctx.request('PATCH', `/api/goals/${goal.id}`, { trackerId: null });
-    assert.equal(unlinked.body.tracker, null);
-
-    await ctx.request('PATCH', `/api/goals/${goal.id}`, { trackerId: tracker.id });
-    await ctx.request('DELETE', `/api/trackers/${tracker.id}`);
-    const after = (await ctx.request('GET', `/api/goals/${goal.id}`)).body;
-    assert.equal(after.trackerId, null); // SetNull
-  });
-
-  it('solo los objetivos por fases se vinculan', async () => {
-    const tracker = await createTracker();
-    const goal = (await ctx.request('POST', '/api/goals', {
-      title: 'Álgebra', type: 'academico', strategy: 'divisible',
-      startDate: '2026-10-05', deadline: '2026-11-08', contents: [{ name: 'Unidad', count: 6 }]
-    })).body;
-    const res = await ctx.request('PATCH', `/api/goals/${goal.id}`, { trackerId: tracker.id });
-    assert.equal(res.status, 400);
-    assert.ok(res.body.fields.trackerId);
+    const bench = await addItem(gym);
+    assert.deepEqual(Object.keys((await addEntry(bench, '2026-13-01', 'mucho')).body.fields).sort(), ['date', 'value']);
+    const entry = await ok(addEntry(bench, '2026-10-05', 80), 201);
+    await ok(ctx.request('DELETE', `/api/items/${bench.id}/entries/${entry.id}`));
+    assert.equal((await ctx.request('DELETE', `/api/items/${bench.id}/entries/${entry.id}`)).status, 404);
   });
 });
 
-describe('tableros', () => {
-  const createBoard = async (body = { name: 'Gimnasio' }) => {
-    const res = await ctx.request('POST', '/api/boards', body);
-    assert.equal(res.status, 201, JSON.stringify(res.body));
-    return res.body;
-  };
-
-  it('crea, lista, edita y valida', async () => {
-    await createBoard({ name: 'Gimnasio', description: 'Fuerza' });
-    await createBoard({ name: 'CS2' });
-    assert.deepEqual((await ctx.request('GET', '/api/boards')).body.map(b => b.name), ['CS2', 'Gimnasio']);
-
-    const [cs] = (await ctx.request('GET', '/api/boards')).body;
-    const edited = await ctx.request('PATCH', `/api/boards/${cs.id}`, { name: 'Counter-Strike 2' });
-    assert.equal(edited.body.name, 'Counter-Strike 2');
-
-    assert.ok((await ctx.request('POST', '/api/boards', { name: '' })).body.fields.name);
-    assert.equal((await ctx.request('PATCH', `/api/boards/${cs.id}`, {})).status, 400);
-  });
-
-  it('un seguimiento se crea dentro de un tablero y se mueve a otro o a ninguno', async () => {
-    const gym = await createBoard();
-    const cs = await createBoard({ name: 'CS2' });
-    const tracker = await createTracker({ name: 'Rating', boardId: gym.id });
-    assert.equal(tracker.boardId, gym.id);
-
-    const moved = await ctx.request('PATCH', `/api/trackers/${tracker.id}`, { boardId: cs.id });
-    assert.equal(moved.body.boardId, cs.id);
-    const loose = await ctx.request('PATCH', `/api/trackers/${tracker.id}`, { boardId: null });
-    assert.equal(loose.body.boardId, null);
-  });
-
-  it('borrar un tablero no borra sus seguimientos ni sus registros', async () => {
-    const gym = await createBoard();
-    const tracker = await createTracker({ name: 'Press banca', unit: 'kg', boardId: gym.id });
-    await addEntry(tracker, '2026-10-05', 80);
-
-    assert.equal((await ctx.request('DELETE', `/api/boards/${gym.id}`)).status, 200);
-    const after = (await ctx.request('GET', `/api/trackers/${tracker.id}`)).body;
-    assert.equal(after.boardId, null);
-    assert.equal(after.entries.length, 1);
-    assert.equal((await ctx.request('DELETE', `/api/boards/${gym.id}`)).status, 404);
-  });
-
-  it('los tableros de otro usuario no se ven, no se tocan y no reciben seguimientos', async () => {
-    const other = await ctx.prisma.user.create({ data: { name: 'Otro' } });
-    const foreign = await ctx.prisma.board.create({ data: { name: 'Ajeno', userId: other.id } });
-
-    assert.deepEqual((await ctx.request('GET', '/api/boards')).body, []);
-    assert.equal((await ctx.request('PATCH', `/api/boards/${foreign.id}`, { name: 'Mío' })).status, 404);
-    assert.equal((await ctx.request('DELETE', `/api/boards/${foreign.id}`)).status, 404);
-
-    const res = await ctx.request('POST', '/api/trackers', { name: 'x', boardId: foreign.id });
-    assert.equal(res.body.fields.boardId, 'Tablero no encontrado');
-    const mine = await createTracker();
-    const move = await ctx.request('PATCH', `/api/trackers/${mine.id}`, { boardId: foreign.id });
-    assert.equal(move.body.fields.boardId, 'Tablero no encontrado');
-  });
-});
-
-describe('tareas vinculadas a un seguimiento', () => {
+describe('tareas vinculadas', () => {
   const task = (body) => ctx.request('POST', '/api/tasks', { title: 'Estudiar', startDate: '2026-10-05', ...body });
 
-  it('una tarea se vincula a un seguimiento propio y lo trae en la respuesta', async () => {
-    const facultad = await createTracker({ name: 'Facultad', kind: 'actividad' });
-    const res = await task({ trackerId: facultad.id });
-    assert.equal(res.status, 201);
-    assert.deepEqual(res.body.tracker, { id: facultad.id, name: 'Facultad', kind: 'actividad' });
+  it('al seguimiento solo, o a un ítem (el seguimiento sale del ítem)', async () => {
+    const facu = await createTracker({ name: 'Facultad', itemLabel: 'Materia' });
+    const logic = await addItem(facu, { name: 'Lógica', kind: 'actividad' });
 
-    const unlinked = await ctx.request('PATCH', `/api/tasks/${res.body.id}`, { trackerId: null });
-    assert.equal(unlinked.body.tracker, null);
+    const general = await ok(task({ trackerId: facu.id }), 201);
+    assert.deepEqual([general.tracker.name, general.item], ['Facultad', null]);
+
+    const withItem = await ok(task({ itemId: logic.id }), 201);
+    assert.deepEqual([withItem.tracker.id, withItem.item.name], [facu.id, 'Lógica']);
+
+    const unlinked = await ok(ctx.request('PATCH', `/api/tasks/${withItem.id}`, { trackerId: null }));
+    assert.deepEqual([unlinked.tracker, unlinked.item], [null, null]);
   });
 
-  it('no se vincula a un seguimiento ajeno', async () => {
+  it('cambiar de seguimiento quita el ítem anterior; un ítem de otro seguimiento se rechaza', async () => {
+    const facu = await createTracker({ name: 'Facultad' });
+    const work = await createTracker({ name: 'Trabajo' });
+    const logic = await addItem(facu, { name: 'Lógica', kind: 'actividad' });
+    const created = await ok(task({ itemId: logic.id }), 201);
+
+    const moved = await ok(ctx.request('PATCH', `/api/tasks/${created.id}`, { trackerId: work.id }));
+    assert.deepEqual([moved.tracker.name, moved.item], ['Trabajo', null]);
+
+    assert.equal((await task({ trackerId: work.id, itemId: logic.id })).body.fields.itemId, 'El ítem no es de ese seguimiento');
+  });
+
+  it('no se vincula a nada ajeno', async () => {
     const other = await ctx.prisma.user.create({ data: { name: 'Otro' } });
     const foreign = await ctx.prisma.tracker.create({ data: { name: 'Ajeno', userId: other.id } });
+    const foreignItem = await ctx.prisma.trackerItem.create({ data: { name: 'x', userId: other.id, trackerId: foreign.id } });
     assert.equal((await task({ trackerId: foreign.id })).body.fields.trackerId, 'Seguimiento no encontrado');
+    assert.equal((await task({ itemId: foreignItem.id })).body.fields.itemId, 'Ítem no encontrado');
   });
 
-  it('borrar el seguimiento no borra sus tareas', async () => {
-    const facultad = await createTracker({ name: 'Facultad', kind: 'actividad' });
-    const created = (await task({ trackerId: facultad.id })).body;
-    await ctx.request('DELETE', `/api/trackers/${facultad.id}`);
-    assert.equal((await ctx.prisma.task.findUnique({ where: { id: created.id } })).trackerId, null);
-  });
-
-  it('las sesiones de un objetivo con seguimiento suman a ese seguimiento', async () => {
-    const tracker = await createTracker();
-    const goal = (await ctx.request('POST', '/api/goals', running({ trackerId: tracker.id }))).body;
-    const session = await ctx.request('POST', `/api/goals/${goal.id}/sessions`, { date: '2026-10-06' });
-    assert.equal(session.body.tracker.id, tracker.id);
-  });
-});
-
-describe('actividad de un seguimiento', () => {
-  it('cuenta las tareas hechas por día (fecha de fin) y no las pendientes', async () => {
-    const facultad = await createTracker({ name: 'Facultad', kind: 'actividad' });
-    const add = async (startDate, endDate, done) => {
-      const t = (await ctx.request('POST', '/api/tasks', { title: 'x', startDate, endDate, trackerId: facultad.id })).body;
-      if (done) await ctx.request('PATCH', `/api/tasks/${t.id}`, { done: true });
+  it('la actividad cuenta tareas hechas por día (fecha de fin): el seguimiento suma todo, cada ítem lo suyo', async () => {
+    const facu = await createTracker({ name: 'Facultad' });
+    const logic = await addItem(facu, { name: 'Lógica', kind: 'actividad' });
+    const add = async (body, done = true) => {
+      const t = await ok(task(body), 201);
+      if (done) await ok(ctx.request('PATCH', `/api/tasks/${t.id}`, { done: true }));
     };
-    await add('2026-10-05', '2026-10-05', true);
-    await add('2026-10-05', '2026-10-05', true);
-    await add('2026-10-03', '2026-10-07', true);  // varios días: cuenta el fin
-    await add('2026-10-06', '2026-10-06', false); // pendiente: no cuenta
+    await add({ itemId: logic.id, startDate: '2026-10-05' });
+    await add({ itemId: logic.id, startDate: '2026-10-03', endDate: '2026-10-07' }); // varios días: cuenta el fin
+    await add({ trackerId: facu.id, startDate: '2026-10-05' });                      // sin materia
+    await add({ itemId: logic.id, startDate: '2026-10-06' }, false);                 // pendiente: no cuenta
 
-    const { body } = await ctx.request('GET', `/api/trackers/${facultad.id}`);
-    assert.equal(body.kind, 'actividad');
-    assert.deepEqual(body.activity, [
+    const tracker = await ok(ctx.request('GET', `/api/trackers/${facu.id}`));
+    assert.deepEqual(tracker.activity, [
       { date: '2026-10-05T00:00:00.000Z', count: 2 },
       { date: '2026-10-07T00:00:00.000Z', count: 1 }
     ]);
+    assert.deepEqual(tracker.items[0].activity, [
+      { date: '2026-10-05T00:00:00.000Z', count: 1 },
+      { date: '2026-10-07T00:00:00.000Z', count: 1 }
+    ]);
+  });
+});
+
+describe('objetivos vinculados a un ítem', () => {
+  it('la sesión suma actividad al ítem y, si es de medición, guarda el valor', async () => {
+    const gym = await createTracker();
+    const bench = await addItem(gym);
+    const goal = await ok(ctx.request('POST', '/api/goals', running({ itemId: bench.id })), 201);
+    assert.deepEqual(goal.item, { id: bench.id, name: 'Press banca', unit: 'kg', kind: 'medicion', tracker: { id: gym.id, name: 'Gimnasio' } });
+
+    const session = await ok(ctx.request('POST', `/api/goals/${goal.id}/sessions`, { date: '2026-10-06', value: 82.5, note: 'fácil' }), 201);
+    assert.deepEqual([session.tracker.id, session.item.id], [gym.id, bench.id]);
+
+    const [entry] = (await ok(ctx.request('GET', `/api/trackers/${gym.id}`))).items[0].entries;
+    assert.deepEqual([entry.value, entry.note, entry.date], [82.5, 'fácil', '2026-10-06T00:00:00.000Z']);
   });
 
-  it('valida el tipo y lista las opciones para elegir', async () => {
-    assert.ok((await ctx.request('POST', '/api/trackers', { name: 'x', kind: 'otro' })).body.fields.kind);
-    const board = (await ctx.request('POST', '/api/boards', { name: 'Gimnasio' })).body;
-    await createTracker({ name: 'Press banca', unit: 'kg', boardId: board.id });
-    await createTracker({ name: 'Facultad', kind: 'actividad' });
-    const options = (await ctx.request('GET', '/api/trackers/options')).body;
-    assert.deepEqual(options.map(o => [o.name, o.kind, o.board?.name ?? null]), [
-      ['Facultad', 'actividad', null],
-      ['Press banca', 'medicion', 'Gimnasio']
-    ]);
-    assert.equal('entries' in options[0], false);
+  it('sin ítem de medición, el valor se rechaza y no se crea nada', async () => {
+    const gym = await createTracker();
+    const cardio = await addItem(gym, { name: 'Cardio', kind: 'actividad' });
+    for (const body of [running(), running({ itemId: cardio.id })]) {
+      const goal = await ok(ctx.request('POST', '/api/goals', body), 201);
+      const res = await ctx.request('POST', `/api/goals/${goal.id}/sessions`, { date: '2026-10-06', value: 80 });
+      assert.equal(res.status, 400);
+      assert.ok(res.body.fields.value);
+    }
+    assert.equal(await ctx.prisma.task.count({ where: { kind: 'sesion' } }), 0);
+  });
+
+  it('se vincula al editar (solo por fases); borrar el ítem no borra el objetivo', async () => {
+    const gym = await createTracker();
+    const bench = await addItem(gym);
+    const goal = await ok(ctx.request('POST', '/api/goals', running()), 201);
+
+    const linked = await ok(ctx.request('PATCH', `/api/goals/${goal.id}`, { itemId: bench.id }));
+    assert.equal(linked.item.id, bench.id);
+    await ok(ctx.request('DELETE', `/api/items/${bench.id}`));
+    assert.equal((await ok(ctx.request('GET', `/api/goals/${goal.id}`))).itemId, null);
+
+    const divisible = await ok(ctx.request('POST', '/api/goals', {
+      title: 'Álgebra', type: 'academico', strategy: 'divisible',
+      startDate: '2026-10-05', deadline: '2026-11-08', contents: [{ name: 'Unidad', count: 6 }]
+    }), 201);
+    const other = await addItem(gym, { name: 'Sentadilla' });
+    assert.ok((await ctx.request('PATCH', `/api/goals/${divisible.id}`, { itemId: other.id })).body.fields.itemId);
   });
 });

@@ -32,14 +32,13 @@ export async function startTestServer() {
   const sessionCookie = async (userId) => `${SESSION_COOKIE}=${await createSession(userId)}`;
   let defaultCookie = null;
 
-  // Estado inicial de cada test: sin objetivos, tareas, seguimientos ni tableros,
+  // Estado inicial de cada test: sin objetivos, tareas ni seguimientos,
   // solo el usuario invitado (sin credenciales) y una sesión suya, que
   // request() usa por defecto
   async function reset() {
     await prisma.goal.deleteMany(); // cascade: sus semanas y tareas
     await prisma.task.deleteMany();
-    await prisma.tracker.deleteMany(); // cascade: sus registros
-    await prisma.board.deleteMany();
+    await prisma.tracker.deleteMany(); // cascade: sus ítems y registros
     await prisma.group.deleteMany(); // cascade: miembros, tableros compartidos y uniones
     await prisma.user.deleteMany({ where: { id: { not: 1 } } });
     await prisma.session.deleteMany();

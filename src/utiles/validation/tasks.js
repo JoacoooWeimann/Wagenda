@@ -28,12 +28,14 @@ function validateTask(body, { partial }) {
     if (description !== undefined) data.description = description;
   }
 
-  // Seguimiento al que suma actividad: un id, o null para desvincular. Que
-  // sea del usuario lo verifica el controller (necesita la base). `category` ya
-  // no se acepta: la clasificación es el seguimiento (whitelist: se ignora).
-  if (has('trackerId')) {
-    if (body.trackerId === null || (Number.isInteger(body.trackerId) && body.trackerId > 0)) data.trackerId = body.trackerId;
-    else fields.trackerId = 'Seguimiento inválido';
+  // Seguimiento al que suma actividad y, opcional, un ítem de ese seguimiento:
+  // ids, o null para desvincular. Que sean del usuario y coherentes entre sí lo
+  // verifica el controller (necesita la base). `category` ya no se acepta: la
+  // clasificación es el seguimiento (whitelist: se ignora).
+  for (const key of ['trackerId', 'itemId']) {
+    if (!has(key)) continue;
+    if (body[key] === null || (Number.isInteger(body[key]) && body[key] > 0)) data[key] = body[key];
+    else fields[key] = key === 'trackerId' ? 'Seguimiento inválido' : 'Ítem inválido';
   }
 
   if (has('priority')) {

@@ -1,29 +1,45 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  validateTrackerCreate, validateTrackerUpdate, validateEntry, validateBoardCreate, validateBoardUpdate
+  validateTrackerCreate, validateTrackerUpdate, validateItemCreate, validateItemUpdate, validateEntry
 } from '../../src/utiles/validation/trackers.js';
 import { trackerSummary } from '../../src/utiles/trackers.js';
 
 describe('validateTrackerCreate / validateTrackerUpdate', () => {
-  it('acepta nombre y campos opcionales', () => {
-    const { data, fields } = validateTrackerCreate({ name: ' Rating Premier ', unit: 'pts', higherIsBetter: true, boardId: 2 });
+  it('nombre obligatorio al crear; descripción y etiqueta de ítems opcionales', () => {
+    const { data, fields } = validateTrackerCreate({ name: ' Gimnasio ', description: '', itemLabel: 'Ejercicio' });
     assert.deepEqual(fields, {});
-    assert.deepEqual(data, { name: 'Rating Premier', unit: 'pts', higherIsBetter: true, boardId: 2 });
+    assert.deepEqual(data, { name: 'Gimnasio', description: null, itemLabel: 'Ejercicio' });
+    assert.ok(validateTrackerCreate({}).fields.name);
+    assert.ok(validateTrackerCreate({ name: 'x'.repeat(41) }).fields.name);
+    assert.ok(validateTrackerCreate({ name: 'a', itemLabel: 'x'.repeat(21) }).fields.itemLabel);
   });
 
-  it('el nombre es obligatorio al crear y opcional al editar', () => {
-    assert.ok(validateTrackerCreate({}).fields.name);
-    assert.deepEqual(validateTrackerUpdate({ unit: 'kg' }).data, { unit: 'kg' });
+  it('al editar, solo lo que viene', () => {
+    assert.deepEqual(validateTrackerUpdate({ itemLabel: 'Materia' }).data, { itemLabel: 'Materia' });
     assert.ok(validateTrackerUpdate({}).error);
   });
+});
 
-  it('rechaza textos largos, tableros inválidos y booleanos que no lo son', () => {
-    assert.ok(validateTrackerCreate({ name: 'x'.repeat(41) }).fields.name);
-    assert.ok(validateTrackerCreate({ name: 'a', unit: 'x'.repeat(11) }).fields.unit);
-    assert.ok(validateTrackerCreate({ name: 'a', boardId: 0 }).fields.boardId);
-    assert.ok(validateTrackerCreate({ name: 'a', higherIsBetter: 1 }).fields.higherIsBetter);
-    assert.deepEqual(validateTrackerUpdate({ boardId: null }).data, { boardId: null }); // null lo saca del tablero
+describe('validateItemCreate / validateItemUpdate', () => {
+  it('acepta nombre, tipo, unidad y "mejor es"', () => {
+    const { data, fields } = validateItemCreate({ name: ' Press banca ', kind: 'medicion', unit: 'kg', higherIsBetter: true });
+    assert.deepEqual(fields, {});
+    assert.deepEqual(data, { name: 'Press banca', kind: 'medicion', unit: 'kg', higherIsBetter: true });
+  });
+
+  it('rechaza tipos, unidades largas y booleanos que no lo son', () => {
+    assert.ok(validateItemCreate({}).fields.name);
+    assert.ok(validateItemCreate({ name: 'a', kind: 'otro' }).fields.kind);
+    assert.ok(validateItemCreate({ name: 'a', unit: 'x'.repeat(11) }).fields.unit);
+    assert.ok(validateItemCreate({ name: 'a', higherIsBetter: 1 }).fields.higherIsBetter);
+  });
+
+  it('al editar se puede pasar a otro seguimiento; al crear, el seguimiento sale de la URL', () => {
+    assert.deepEqual(validateItemUpdate({ trackerId: 4 }).data, { trackerId: 4 });
+    assert.ok(validateItemUpdate({ trackerId: null }).fields.trackerId);
+    assert.equal('trackerId' in validateItemCreate({ name: 'a', trackerId: 4 }).data, false);
+    assert.ok(validateItemUpdate({}).error);
   });
 });
 
@@ -66,20 +82,6 @@ describe('trackerSummary', () => {
 
   it('sin registros', () => {
     assert.deepEqual(trackerSummary([], true), { count: 0, last: null, best: null, change: null });
-  });
-});
-
-describe('validateBoardCreate / validateBoardUpdate', () => {
-  it('nombre obligatorio al crear, descripción opcional', () => {
-    assert.deepEqual(validateBoardCreate({ name: ' Gimnasio ', description: '' }).data, { name: 'Gimnasio', description: null });
-    assert.ok(validateBoardCreate({}).fields.name);
-    assert.ok(validateBoardCreate({ name: 'x'.repeat(41) }).fields.name);
-    assert.ok(validateBoardCreate({ name: 'a', description: 'x'.repeat(201) }).fields.description);
-  });
-
-  it('al editar, solo lo que viene', () => {
-    assert.deepEqual(validateBoardUpdate({ description: 'Fuerza' }).data, { description: 'Fuerza' });
-    assert.ok(validateBoardUpdate({}).error);
   });
 });
 

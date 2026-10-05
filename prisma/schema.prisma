@@ -52,7 +52,7 @@ model User {
   tasks    Task[]
   goals    Goal[]
   trackers Tracker[]
-  boards   Board[]
+  items    TrackerItem[]
   groups   GroupMember[]
   joins    ShareJoin[]
 }
@@ -75,10 +75,11 @@ model Goal {
   userId Int
   weeks  GoalWeek[]
 
-  // Seguimiento opcional: al registrar una sesión se puede cargar también una
-  // medición. SetNull: borrar el seguimiento no borra el objetivo.
-  tracker   Tracker? @relation(fields: [trackerId], references: [id], onDelete: SetNull)
-  trackerId Int?
+  // Ítem de un seguimiento (opcional, ej. Gimnasio › Press banca): al registrar
+  // una sesión se puede cargar también una medición, y la sesión suma actividad.
+  // SetNull: borrar el ítem no borra el objetivo.
+  item   TrackerItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  itemId Int?
 
   @@index([userId])
 }
@@ -120,80 +121,85 @@ model Task {
   goalWeek   GoalWeek? @relation(fields: [goalWeekId], references: [id], onDelete: Cascade)
   goalWeekId Int?
 
-  // Seguimiento al que suma actividad (opcional). SetNull: borrar el
-  // seguimiento no borra las tareas.
-  tracker   Tracker? @relation(fields: [trackerId], references: [id], onDelete: SetNull)
+  // Seguimiento al que suma actividad (opcional, ej. Facultad) y, dentro de él,
+  // el ítem (opcional, ej. Lógica). Si hay ítem, el seguimiento es el del ítem
+  // (lo verifica el controller). SetNull: borrar cualquiera no borra la tarea.
+  tracker   Tracker?     @relation(fields: [trackerId], references: [id], onDelete: SetNull)
   trackerId Int?
+  item      TrackerItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  itemId    Int?
 
   @@index([goalWeekId])
   @@index([trackerId])
+  @@index([itemId])
   // Cubre la consulta del mes (userId = ? AND startDate < ? ORDER BY startDate)
   // y, por empezar con userId, también las búsquedas por la foreign key
   @@index([userId, startDate])
 }
 
-// Tablero: agrupa seguimientos relacionados (ej. "Gimnasio": press banca,
-// sentadilla; "CS2": rating, K/D). Más adelante es lo que se comparte con un
-// grupo de amigos, y cada miembro elige si se une.
-model Board {
-  id          Int      @id @default(autoincrement())
-  name        String
-  description String?
-  createdAt   DateTime @default(now())
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId   Int
-  trackers Tracker[]
-  shares   BoardShare[]
-
-  // Copia de un tablero compartido al que el usuario se unió. Mientras está
-  // vinculada, su estructura la define el dueño del original. SetNull: si el
-  // original desaparece, la copia queda como tablero personal, con sus datos.
-  sourceBoard   Board?  @relation("BoardCopies", fields: [sourceBoardId], references: [id], onDelete: SetNull)
-  sourceBoardId Int?
-  copies        Board[] @relation("BoardCopies")
-
-  @@index([userId])
-  @@index([sourceBoardId])
-}
-
-// medicion: valores con fecha (press banca en kg, rating) · actividad: cuenta
-// las tareas hechas vinculadas (ej. "Facultad"). Los dos aceptan tareas.
+// Tipo de un ítem. medicion: valores con fecha (press banca en kg, nota de un
+// parcial) · actividad: cuenta las tareas hechas vinculadas. Los dos aceptan tareas.
 enum TrackerKind {
   medicion
   actividad
 }
 
-// Algo que se mide en el tiempo, sin fecha límite (ej. "Press banca" en kg,
-// "Rating Premier" en pts). Un objetivo mide constancia (sesiones y cuotas);
-// un seguimiento mide rendimiento. Es lo que más adelante se comparte en grupos.
+// Seguimiento: un área que se sigue en el tiempo, sin fecha límite (ej.
+// "Gimnasio", "Facultad", "Trabajo"). Adentro tiene ítems (ejercicios,
+// materias, proyectos) y suma la actividad de las tareas vinculadas.
+// Es lo que se comparte con un grupo de amigos.
 model Tracker {
-  id             Int       @id @default(autoincrement())
-  name           String
-  unit           String?
-  kind           TrackerKind @default(medicion)
-  higherIsBetter Boolean   @default(true) // en "5 km" (minutos), menos es mejor
-  createdAt      DateTime  @default(now())
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  itemLabel   String?  // cómo se llaman sus ítems: "Ejercicio", "Materia"…
+  createdAt   DateTime @default(now())
 
-  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId  Int
-  entries TrackerEntry[]
-  goals   Goal[]
-  tasks   Task[] // tareas vinculadas: su cantidad hecha es la "actividad"
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+  items  TrackerItem[]
+  tasks  Task[]        // tareas vinculadas: su cantidad hecha es la "actividad"
+  shares TrackerShare[]
 
-  // Tablero opcional (uno solo). SetNull: borrar un tablero no borra sus
-  // seguimientos ni sus registros; pasan a "Sin tablero".
-  board   Board? @relation(fields: [boardId], references: [id], onDelete: SetNull)
-  boardId Int?
-
-  // Copia vinculada a un seguimiento de un tablero compartido (ver Board.sourceBoardId)
+  // Copia de un seguimiento compartido al que el usuario se unió. Mientras está
+  // vinculada, su estructura la define el dueño del original. SetNull: si el
+  // original desaparece, la copia queda como seguimiento personal, con sus datos.
   sourceTracker   Tracker?  @relation("TrackerCopies", fields: [sourceTrackerId], references: [id], onDelete: SetNull)
   sourceTrackerId Int?
   copies          Tracker[] @relation("TrackerCopies")
 
   @@index([userId])
-  @@index([boardId])
   @@index([sourceTrackerId])
+}
+
+// Ítem de un seguimiento: un ejercicio, una materia, un proyecto. De medición
+// (valores con fecha: press banca en kg, nota de un parcial) o de actividad
+// (cuenta las tareas hechas vinculadas). Cascade: es parte del seguimiento.
+model TrackerItem {
+  id             Int         @id @default(autoincrement())
+  name           String
+  kind           TrackerKind @default(medicion)
+  unit           String?
+  higherIsBetter Boolean     @default(true) // en "5 km" (minutos), menos es mejor
+  createdAt      DateTime    @default(now())
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  tracker   Tracker        @relation(fields: [trackerId], references: [id], onDelete: Cascade)
+  trackerId Int
+  entries   TrackerEntry[]
+  goals     Goal[]
+  tasks     Task[]
+
+  // Copia vinculada a un ítem de un seguimiento compartido (ver Tracker.sourceTrackerId)
+  sourceItem   TrackerItem?  @relation("ItemCopies", fields: [sourceItemId], references: [id], onDelete: SetNull)
+  sourceItemId Int?
+  copies       TrackerItem[] @relation("ItemCopies")
+
+  @@index([userId])
+  @@index([trackerId])
+  @@index([sourceItemId])
 }
 
 model TrackerEntry {
@@ -203,11 +209,11 @@ model TrackerEntry {
   note      String?
   createdAt DateTime @default(now())
 
-  tracker   Tracker @relation(fields: [trackerId], references: [id], onDelete: Cascade)
-  trackerId Int
+  item   TrackerItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId Int
 
-  // Historial de un seguimiento ordenado por fecha
-  @@index([trackerId, date])
+  // Historial de un ítem ordenado por fecha
+  @@index([itemId, date])
 }
 
 // Sesión iniciada. La cookie lleva un token aleatorio; acá se guarda solo su
@@ -227,7 +233,7 @@ model Session {
 
 // --- Grupos -----------------------------------------------------------------
 // Un grupo de amigos. Se entra con el código de invitación. Entrar no comparte
-// nada: cada miembro elige a qué tableros compartidos unirse.
+// nada: cada miembro elige a qué seguimientos compartidos unirse.
 
 enum GroupRole {
   owner // el creador (o a quien se lo transfirió): administra el grupo
@@ -245,7 +251,7 @@ model Group {
   createdAt   DateTime @default(now())
 
   members GroupMember[]
-  shares  BoardShare[]
+  shares  TrackerShare[]
 }
 
 model GroupMember {
@@ -262,28 +268,28 @@ model GroupMember {
   @@index([userId])
 }
 
-// Un tablero (original, nunca una copia) compartido en un grupo
-model BoardShare {
+// Un seguimiento (original, nunca una copia) compartido en un grupo
+model TrackerShare {
   id        Int      @id @default(autoincrement())
   createdAt DateTime @default(now())
 
-  group   Group       @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  groupId Int
-  board   Board       @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  boardId Int
-  joins   ShareJoin[]
+  group     Group       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId   Int
+  tracker   Tracker     @relation(fields: [trackerId], references: [id], onDelete: Cascade)
+  trackerId Int
+  joins     ShareJoin[]
 
-  @@unique([groupId, boardId])
-  @@index([boardId])
+  @@unique([groupId, trackerId])
+  @@index([trackerId])
 }
 
-// "Unirme": el usuario participa del tablero compartido EN ESTE grupo (si el
-// mismo tablero está en otro grupo, ahí no aparece salvo que se una también)
+// "Unirme": el usuario participa del seguimiento compartido EN ESTE grupo (si el
+// mismo seguimiento está en otro grupo, ahí no aparece salvo que se una también)
 model ShareJoin {
   id       Int      @id @default(autoincrement())
   joinedAt DateTime @default(now())
 
-  share   BoardShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  share   TrackerShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
   shareId Int
   user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId  Int

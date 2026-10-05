@@ -76,11 +76,11 @@ describe('validateGoalCreate', () => {
     assert.match(validateGoalCreate(divisible({ contents: [{ name: 'TP', count: 1 }, { name: 'tp', count: 2 }] })).fields.contents, /mismo nombre/);
   });
 
-  it('trackerId opcional, solo en fases', () => {
-    assert.equal(validateGoalCreate(fases({ trackerId: 3 })).data.trackerId, 3);
-    assert.ok(validateGoalCreate(fases({ trackerId: 'x' })).fields.trackerId);
-    assert.equal(validateGoalCreate(fases({ trackerId: null })).data.trackerId, undefined);
-    assert.equal(validateGoalCreate(divisible({ trackerId: 3 })).data.trackerId, undefined); // se ignora
+  it('itemId (ítem de un seguimiento) opcional, solo en fases', () => {
+    assert.equal(validateGoalCreate(fases({ itemId: 3 })).data.itemId, 3);
+    assert.ok(validateGoalCreate(fases({ itemId: 'x' })).fields.itemId);
+    assert.equal(validateGoalCreate(fases({ itemId: null })).data.itemId, undefined);
+    assert.equal(validateGoalCreate(divisible({ itemId: 3 })).data.itemId, undefined); // se ignora
   });
 
   it('reviewWeek tiene que ser booleano', () => {
@@ -122,8 +122,8 @@ describe('validateGoalUpdate', () => {
     assert.ok(validateGoalUpdate({ title: '  ' }).fields.title);
     assert.ok(validateGoalUpdate({ type: 'x' }).fields.type);
     assert.ok(validateGoalUpdate({ status: 'cerrado' }).fields.status);
-    assert.ok(validateGoalUpdate({ trackerId: 0 }).fields.trackerId);
-    assert.deepEqual(validateGoalUpdate({ trackerId: null }).data, { trackerId: null });
+    assert.ok(validateGoalUpdate({ itemId: 0 }).fields.itemId);
+    assert.deepEqual(validateGoalUpdate({ itemId: null }).data, { itemId: null });
     assert.ok(validateGoalUpdate({}).error);
     assert.ok(validateGoalUpdate({ strategy: 'fases' }).error); // la estrategia no se edita
   });
