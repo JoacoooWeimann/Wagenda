@@ -12,6 +12,7 @@ import groupRoutes from './routes/groups.js';
 import weekRoutes from './routes/week.js';
 import { exposeCurrentPath } from './middlewares/locals.js';
 import { loadUser, requireAuth } from './middlewares/auth.js';
+import { securityHeaders } from './middlewares/security.js';
 import { notFound, errorHandler } from './middlewares/errors.js';
 
 // Arma la app sin ponerla a escuchar: así los tests pueden levantarla en un
@@ -26,7 +27,8 @@ app.set('views', path.join(import.meta.dirname, 'views'));
 // Una línea por pedido (método, URL, status, tiempo); en producción y tests no hace falta
 if (!['production', 'test'].includes(process.env.NODE_ENV)) app.use(morgan('dev'));
 
-app.use(healthRoutes); // antes que todo lo demás: no necesita sesión ni body
+app.use(securityHeaders); // en todas las respuestas, incluidos estáticos y errores
+app.use(healthRoutes);    // antes que lo demás: no necesita sesión ni body
 app.use(express.static(path.join(import.meta.dirname, 'public')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false })); // formularios de login y registro

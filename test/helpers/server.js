@@ -79,7 +79,7 @@ export async function startTestServer() {
     const type = res.headers.get('content-type') || '';
     const data = type.includes('application/json') ? await res.json() : await res.text();
     const setCookie = res.headers.getSetCookie().find(c => c.startsWith(`${SESSION_COOKIE}=`)) ?? null;
-    return { status: res.status, type, body: data, location: res.headers.get('location'), setCookie };
+    return { status: res.status, type, body: data, location: res.headers.get('location'), setCookie, headers: res.headers };
   }
 
   return { prisma, reset, stop, request, sessionCookie };

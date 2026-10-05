@@ -205,3 +205,19 @@ describe('producción', () => {
     assert.deepEqual(res.body, { ok: true });
   });
 });
+
+describe('encabezados de seguridad', () => {
+  it('las páginas llevan CSP y protección contra iframes y sniffing', async () => {
+    const { headers } = await ctx.request('GET', '/', undefined, { cookie: null });
+    const res = { get: (name) => headers.get(name) };
+    const csp = res.get('content-security-policy');
+    assert.match(csp, /default-src 'self'/);
+    assert.match(csp, /script-src 'self'(;|$)/);  // sin scripts en línea ni de afuera
+    assert.match(csp, /style-src 'self' https:\/\/cdn\.jsdelivr\.net/);
+    assert.match(csp, /frame-ancestors 'none'/);
+    assert.equal(res.get('x-content-type-options'), 'nosniff');
+    assert.equal(res.get('x-frame-options'), 'SAMEORIGIN');
+    assert.equal(res.get('x-powered-by'), null); // no anuncia que es Express
+    assert.equal(res.get('strict-transport-security'), null); // HSTS solo en producción
+  });
+});
