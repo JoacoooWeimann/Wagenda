@@ -126,11 +126,11 @@ User ─┬─< Session                    (sesiones iniciadas)
 |---|---|
 | `User` | `name` (visible), `username` (único, para entrar), `passwordHash` |
 | `Session` | `tokenHash` (único), `expiresAt` |
-| `Task` | `title`, `startDate`/`endDate`, `priority`, `category`, `done`, `kind`, `goalWeekId?` |
+| `Task` | `title`, `startDate`/`endDate`, `priority`, `done`, `kind`, `goalWeekId?`, `trackerId?` (seguimiento al que suma), `category?` (solo tareas de objetivos) |
 | `Goal` | `title`, `type` (académico, físico, videojuego, profesional), `strategy` (divisible, fases), `startDate`, `deadline`, `status` (activo, logrado, abandonado), `closedAt?`, `trackerId?` |
 | `GoalWeek` | `number`, `startDate`/`endDate`, `label` (ej. "Unidad 3 · TP 2", "Intensidad"), `target` (cuota) |
 | `Board` | `name`, `description?` |
-| `Tracker` | `name`, `unit?`, `higherIsBetter`, `boardId?` |
+| `Tracker` | `name`, `kind` (medicion, actividad), `unit?`, `higherIsBetter`, `boardId?` |
 | `TrackerEntry` | `date`, `value`, `note?` |
 | `Group` | `name`, `description?`, `inviteCode` (único), `weeklyLimit?` |
 | `GroupMember` | `role` (owner, member) |
@@ -267,6 +267,22 @@ registros; la mejor marca depende de `higherIsBetter` (en 5 km, menos es mejor).
   Borrar un tablero es una acción de organización y no destruye historial.
   Reemplazan a la "categoría" que tenía el seguimiento: dos formas de agrupar
   confundían, y "Gimnasio" dice más que "Físico".
+- **Dos tipos:** de **medición** (se cargan valores: kg, puntos, minutos) o de
+  **actividad** (cuenta tareas hechas, ej. "Facultad"; no pide unidad ni valores).
+- **Las tareas se clasifican eligiendo un seguimiento** (de cualquier tipo), en
+  vez de escribir una categoría. Cada tarea hecha suma **actividad** a ese
+  seguimiento: la página muestra cuántas esta semana, el total y un gráfico de
+  barras de las últimas 8 semanas. Así se ve cuánto se trabaja en cada área.
+  - **Qué fecha cuenta:** la de la tarea (su fin: el día en que tenía que estar
+    hecha), no el momento en que se marcó. Es simple y no agrega un campo.
+  - El servidor devuelve la actividad como `[{ date, count }]` (tareas hechas
+    por día, con `groupBy`); las semanas las arma el cliente, que es quien sabe
+    qué día es hoy.
+  - Las sesiones de un objetivo vinculado a un seguimiento suman actividad a ese seguimiento.
+  - **Migración:** las categorías escritas a mano que existían se convirtieron
+    en seguimientos de actividad (uno por nombre, sin importar mayúsculas, o el
+    seguimiento propio que ya se llamara igual) y sus tareas quedaron vinculadas.
+    `Task.category` queda solo para las tareas generadas por un objetivo (su tipo).
 - Limitación: los valores son numéricos. Los rangos con nombre (ej. "Gold
   Nova") necesitarían una escala ordinal.
 - El gráfico de evolución es un SVG hecho a mano (una `polyline`), sin
@@ -283,7 +299,9 @@ tiene que servir igual a quien la usa solo.
 - **Al unirse, recibe una copia** del tablero y sus seguimientos en su cuenta
   (`Board.sourceBoardId`, `Tracker.sourceTrackerId`), y carga ahí sus valores.
   El grupo ve un **ranking por seguimiento** (el dueño con el original, los
-  demás con su copia), ordenable por mejor marca, último valor o mejora.
+  demás con su copia), ordenable por mejor marca, último valor, mejora o
+  **actividad** (tareas hechas: solo la cantidad, nunca títulos ni fechas, y
+  con el mismo límite semanal).
 - **Solo valores y fechas:** las notas de los registros son privadas. Nunca se
   comparten objetivos, fechas límite, tareas ni otros seguimientos.
 - **Participar es por grupo:** unirse a un tablero en un grupo no te muestra en
@@ -351,7 +369,7 @@ Sin sesión responden `401`; el cliente redirige al login.
 | `startDate` | Obligatorio, `"YYYY-MM-DD"` |
 | `endDate` | `"YYYY-MM-DD"`, mayor o igual que `startDate`. Si no viene, es igual a `startDate` |
 | `priority` | `baja`, `normal` o `alta` (por defecto `normal`) |
-| `category` | Opcional, máximo 30 caracteres |
+| `trackerId` | Opcional: id de un seguimiento propio, o `null`. Reemplaza a la categoría escrita (`category` ya no se acepta) |
 | `done` | `true` o `false` (booleano estricto) |
 
 ### Objetivos
@@ -387,8 +405,9 @@ Sobre un objetivo cerrado, todo lo que modifica el plan responde `400` con
 
 | Método | Ruta | Descripción | Respuesta OK |
 |---|---|---|---|
-| `GET` | `/api/trackers` | Seguimientos con registros y resumen | `200` + lista |
-| `POST` | `/api/trackers` | `{ name, unit?, higherIsBetter?, boardId? }` | `201` + seguimiento |
+| `GET` | `/api/trackers` | Seguimientos con registros, resumen y actividad | `200` + lista |
+| `GET` | `/api/trackers/options` | Lista liviana (id, nombre, tipo, unidad, tablero) para elegir en formularios | `200` + lista |
+| `POST` | `/api/trackers` | `{ name, kind?, unit?, higherIsBetter?, boardId? }` | `201` + seguimiento |
 | `GET` | `/api/trackers/:id` | Seguimiento con registros y resumen | `200` + seguimiento |
 | `PATCH` | `/api/trackers/:id` | Actualiza solo los campos enviados | `200` + seguimiento |
 | `DELETE` | `/api/trackers/:id` | Borra el seguimiento y sus registros | `200` + `{ ok: true }` |
@@ -588,7 +607,7 @@ Los tests de integración usan una base SQLite propia por proceso
 (`prisma/test-<pid>.db`), creada con las mismas migraciones y borrada al
 terminar: nunca tocan `dev.db`. La app escucha en el puerto 0 (el sistema
 operativo asigna uno libre), así los tests pueden correr con el servidor de
-desarrollo levantado. Hay 254 tests; la lógica de planificación está cubierta
+desarrollo levantado. Hay 270 tests; la lógica de planificación está cubierta
 al 100%.
 
 ## Roadmap

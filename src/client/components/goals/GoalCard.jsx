@@ -179,7 +179,7 @@ export default function GoalCard({ goal, today, trackers, onChange, onDelete, on
             min={goal.startDate.slice(0, 10)} max={maxSessionDate}
             onChange={(e) => setSessionDate(e.target.value)}
           />
-          {goal.tracker && (
+          {goal.tracker?.kind === 'medicion' && (
             <input
               type="number" step="any" value={sessionValue} className="goal-session-value"
               placeholder={`${goal.tracker.name}${goal.tracker.unit ? ` (${goal.tracker.unit})` : ''}`}

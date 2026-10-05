@@ -3,12 +3,18 @@
 export const RANKING_MODES = [
   { value: 'best', label: 'Mejor marca' },
   { value: 'last', label: 'Último' },
-  { value: 'change', label: 'Mejora' }
+  { value: 'change', label: 'Mejora' },
+  { value: 'activity', label: 'Actividad' }
 ];
+
+// Un seguimiento de actividad no tiene valores: siempre se ordena por actividad
+export const modeFor = (tracker, mode) => (tracker.kind === 'actividad' ? 'activity' : mode);
 
 // Valor por el que se ordena una fila según el modo, "más alto = mejor"
 // (si en el seguimiento menos es mejor, se invierte el signo). null = sin registros.
-function score(summary, mode, higherIsBetter) {
+function score(row, mode, higherIsBetter) {
+  if (mode === 'activity') return row.activity; // tareas hechas: siempre hay un número (0 incluido)
+  const { summary } = row;
   if (summary.count === 0) return null;
   const sign = higherIsBetter ? 1 : -1;
   if (mode === 'best') return sign * summary.best.value;
@@ -20,13 +26,15 @@ function score(summary, mode, higherIsBetter) {
 // al final; a igual valor, se respeta el orden original (sort es estable).
 export function sortRanking(rows, mode, higherIsBetter) {
   return rows
-    .map(row => ({ row, value: score(row.summary, mode, higherIsBetter) }))
+    .map(row => ({ row, value: score(row, mode, higherIsBetter) }))
     .sort((a, b) => (a.value === null) - (b.value === null) || (b.value ?? 0) - (a.value ?? 0))
     .map(({ row }) => row);
 }
 
 // Valor a mostrar en la columna del modo elegido
-export function rankingValue(summary, mode) {
+export function rankingValue(row, mode) {
+  if (mode === 'activity') return row.activity;
+  const { summary } = row;
   if (summary.count === 0) return null;
   if (mode === 'best') return summary.best.value;
   if (mode === 'last') return summary.last.value;

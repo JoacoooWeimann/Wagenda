@@ -11,7 +11,7 @@ import SessionLogger from './SessionLogger.jsx';
 // ("+ Nueva tarea" o click en una tarea para editarla). Lo usan el modal del calendario y la card
 // del inicio: un solo componente para lo mismo. Se monta con key = fecha, así
 // al cambiar de día el estado (edición, errores) arranca limpio.
-export default function DayPanel({ date, tasks, sessionGoals, onTaskSaved, onTaskRemoved }) {
+export default function DayPanel({ date, tasks, sessionGoals, trackers, onTaskSaved, onTaskRemoved }) {
   const [editingTask, setEditingTask] = useState(null);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState(null);
@@ -73,6 +73,7 @@ export default function DayPanel({ date, tasks, sessionGoals, onTaskSaved, onTas
           key={editingTask?.id ?? 'nueva'}
           date={date}
           editingTask={editingTask}
+          trackers={trackers}
           onSaved={handleSaved}
           onCancel={closeForm}
           onError={setError}

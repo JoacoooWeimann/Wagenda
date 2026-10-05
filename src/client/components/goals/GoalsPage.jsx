@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getGoals, deleteGoal, getTrackers } from '../../utiles/api.js';
+import { getGoals, deleteGoal, getTrackerOptions } from '../../utiles/api.js';
 import { todayKey, isClosed } from '../../utiles/goals.js';
 import { ErrorBanner } from '../common.jsx';
 import GoalCard from './GoalCard.jsx';
@@ -29,7 +29,7 @@ export default function GoalsPage() {
   useEffect(() => {
     loadGoals().then(data => setShowForm(data.length === 0));
     // Si falla, los objetivos siguen funcionando: solo no se ofrece vincular
-    getTrackers().then(setTrackers).catch(() => setTrackers([]));
+    getTrackerOptions().then(setTrackers).catch(() => setTrackers([]));
   }, []);
 
   async function handleCreated() {

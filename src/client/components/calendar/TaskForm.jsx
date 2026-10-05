@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { createTask, updateTask } from '../../utiles/api.js';
 import { FieldError } from '../common.jsx';
 import { PRIORIDADES, ETIQUETA_PRIORIDAD } from './constants.js';
+import TrackerPicker from '../trackers/TrackerPicker.jsx';
 
-const emptyForm = (date) => ({ title: '', description: '', startDate: date, endDate: date, priority: 'normal', category: '' });
+const emptyForm = (date) => ({ title: '', description: '', startDate: date, endDate: date, priority: 'normal', trackerId: '' });
 
 const formFromTask = (task) => ({
   title: task.title,
@@ -11,12 +12,12 @@ const formFromTask = (task) => ({
   startDate: task.startDate.slice(0, 10),
   endDate: task.endDate.slice(0, 10),
   priority: task.priority,
-  category: task.category || ''
+  trackerId: task.trackerId ? String(task.trackerId) : ''
 });
 
 // Formulario de alta/edición. El componente padre lo monta con key = tarea en
 // edición: al cambiar de tarea, React crea uno nuevo y el estado arranca limpio.
-export default function TaskForm({ date, editingTask, onSaved, onCancel, onError }) {
+export default function TaskForm({ date, editingTask, trackers = [], onSaved, onCancel, onError }) {
   const [form, setForm] = useState(() => (editingTask ? formFromTask(editingTask) : emptyForm(date)));
   const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -36,7 +37,12 @@ export default function TaskForm({ date, editingTask, onSaved, onCancel, onError
       return;
     }
 
-    const payload = { ...form, endDate: form.endDate || form.startDate };
+    // El seguimiento viaja como id (o null = sin seguimiento)
+    const payload = {
+      ...form,
+      endDate: form.endDate || form.startDate,
+      trackerId: form.trackerId === '' ? null : Number(form.trackerId)
+    };
     setSaving(true);
     onError(null);
 
@@ -89,9 +95,9 @@ export default function TaskForm({ date, editingTask, onSaved, onCancel, onError
           <FieldError message={fieldErrors.priority} />
         </div>
         <div className="calendar-field">
-          <input type="text" placeholder="Categoría (opcional)" maxLength={30} className={invalid('category')}
-            value={form.category} onChange={(e) => updateField('category', e.target.value)} />
-          <FieldError message={fieldErrors.category} />
+          <TrackerPicker options={trackers} value={form.trackerId} className={invalid('trackerId')}
+            onChange={(value) => updateField('trackerId', value)} />
+          <FieldError message={fieldErrors.trackerId} />
         </div>
       </div>
       <div className="calendar-task-form-actions">

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { buildCalendar, toDateKey, MESES, DIAS_SEMANA } from '../../utiles/calendar.js';
-import { getTasks, getGoals } from '../../utiles/api.js';
+import { getTasks, getGoals, getTrackerOptions } from '../../utiles/api.js';
 import { dayInRange, highestPriority, sessionGoalsFor } from '../../utiles/tasks.js';
 import { todayKey } from '../../utiles/goals.js';
 import { ErrorBanner } from '../common.jsx';
@@ -14,6 +14,7 @@ export default function Calendar({ initialYear, initialMonth }) {
   const [selectedDay, setSelectedDay] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [goals, setGoals] = useState([]);
+  const [trackers, setTrackers] = useState([]); // para clasificar tareas
   const [error, setError] = useState(null);
 
   const { weeks } = buildCalendar(year, month);
@@ -33,6 +34,7 @@ export default function Calendar({ initialYear, initialMonth }) {
   // Si falla, el calendario funciona igual: solo no se ofrece esa opción.
   useEffect(() => {
     getGoals().then(setGoals).catch(() => setGoals([]));
+    getTrackerOptions().then(setTrackers).catch(() => setTrackers([]));
   }, []);
 
   function goPrev() { month === 1 ? (setMonth(12), setYear(y => y - 1)) : setMonth(m => m - 1); }
@@ -103,6 +105,7 @@ export default function Calendar({ initialYear, initialMonth }) {
           date={selectedKey}
           tasks={tasksForDay(selectedDay)}
           sessionGoals={sessionGoalsFor(goals, selectedKey, todayKey())}
+          trackers={trackers}
           onClose={closeModal}
           onTaskSaved={handleTaskSaved}
           onTaskRemoved={handleTaskRemoved}

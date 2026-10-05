@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { getTasks, getGoals } from '../../utiles/api.js';
+import { getTasks, getGoals, getTrackerOptions } from '../../utiles/api.js';
 import { dayInRange, sessionGoalsFor } from '../../utiles/tasks.js';
 import { shiftDay, dayTitle, relativeLabel, monthOf } from '../../utiles/calendar.js';
 import { ErrorBanner } from '../common.jsx';
@@ -19,6 +19,7 @@ export default function DayCard({ initialDate, today }) {
   const [direction, setDirection] = useState(null); // 'next' | 'prev': sentido de la animación
   const [months, setMonths] = useState({});         // cache de tareas por mes: { "2026-10": [...] }
   const [goals, setGoals] = useState([]);
+  const [trackers, setTrackers] = useState([]); // para clasificar tareas
   const [error, setError] = useState(null);
   const pointerStart = useRef(null);
 
@@ -57,6 +58,7 @@ export default function DayCard({ initialDate, today }) {
   // Objetivos, para ofrecer registrar sesiones (si falla, solo no se ofrece)
   useEffect(() => {
     getGoals().then(setGoals).catch(() => setGoals([]));
+    getTrackerOptions().then(setTrackers).catch(() => setTrackers([]));
   }, []);
 
   // La URL refleja el día: recargar o compartir el link abre el mismo
@@ -156,6 +158,7 @@ export default function DayCard({ initialDate, today }) {
                 date={date}
                 tasks={dayTasks}
                 sessionGoals={sessionGoalsFor(goals, date, today)}
+              trackers={trackers}
                 onTaskSaved={handleTaskSaved}
                 onTaskRemoved={handleTaskRemoved}
               />

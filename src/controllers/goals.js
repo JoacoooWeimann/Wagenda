@@ -65,7 +65,7 @@ function withProgress(goal, { keepTasks }) {
 }
 
 // El seguimiento vinculado viaja con el objetivo: la UI muestra su nombre y unidad
-const LINKED_TRACKER = { tracker: { select: { id: true, name: true, unit: true } } };
+const LINKED_TRACKER = { tracker: { select: { id: true, name: true, unit: true, kind: true } } };
 
 const GOAL_WITH_PLAN = {
   ...LINKED_TRACKER,

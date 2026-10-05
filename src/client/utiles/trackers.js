@@ -35,13 +35,18 @@ const round = (n) => Math.round(n * 10) / 10;
 
 // Body para crear o editar un seguimiento a partir del formulario.
 // boardId viaja como texto en el select: '' = sin tablero (null).
+// Un seguimiento de actividad no usa unidad ni "mejor es": no se mandan.
 export function buildTrackerPayload(form) {
-  return {
+  const payload = {
     name: form.name,
-    unit: form.unit,
-    higherIsBetter: form.higherIsBetter,
+    kind: form.kind,
     boardId: form.boardId === '' ? null : Number(form.boardId)
   };
+  if (form.kind === 'medicion') {
+    payload.unit = form.unit;
+    payload.higherIsBetter = form.higherIsBetter;
+  }
+  return payload;
 }
 
 // Agrupa los seguimientos por tablero, en el orden de `boards`, más los que no
@@ -51,4 +56,48 @@ export function groupByBoard(boards, trackers) {
     sections: boards.map(board => ({ board, trackers: trackers.filter(t => t.boardId === board.id) })),
     loose: trackers.filter(t => t.boardId === null)
   };
+}
+
+const DAY_MS = 86400000;
+const keyToTime = (key) => Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, Number(key.slice(8, 10)));
+// Lunes de la semana de una clave "YYYY-MM-DD", en milisegundos UTC
+function mondayOf(key) {
+  const time = keyToTime(key);
+  const weekday = (new Date(time).getUTCDay() + 6) % 7; // lunes=0
+  return time - weekday * DAY_MS;
+}
+
+// Actividad por semana: las últimas `weeks` semanas (lunes a domingo, la
+// última es la de hoy) con cuántas tareas se hicieron en cada una, más el
+// total de esta semana y el histórico. `activity` = [{ date, count }] del servidor.
+export function weeklyActivity(activity, today, weeks = 8) {
+  const thisMonday = mondayOf(today);
+  const counts = Array(weeks).fill(0);
+  let total = 0;
+  for (const { date, count } of activity) {
+    total += count;
+    const index = weeks - 1 - Math.round((thisMonday - mondayOf(date.slice(0, 10))) / (7 * DAY_MS));
+    if (index >= 0 && index < weeks) counts[index] += count;
+  }
+  const label = (i) => {
+    const d = new Date(thisMonday - (weeks - 1 - i) * 7 * DAY_MS);
+    return `${d.getUTCDate()}/${d.getUTCMonth() + 1}`;
+  };
+  return {
+    weeks: counts.map((count, i) => ({ label: label(i), count })),
+    thisWeek: counts[weeks - 1],
+    total
+  };
+}
+
+// Opciones de seguimiento agrupadas por tablero (para <optgroup>): los que no
+// tienen tablero van primero, sin grupo
+export function groupTrackerOptions(options) {
+  const loose = options.filter(o => !o.board);
+  const boards = new Map();
+  for (const o of options.filter(o => o.board)) {
+    if (!boards.has(o.board.id)) boards.set(o.board.id, { name: o.board.name, options: [] });
+    boards.get(o.board.id).options.push(o);
+  }
+  return { loose, groups: [...boards.values()].sort((a, b) => a.name.localeCompare(b.name)) };
 }

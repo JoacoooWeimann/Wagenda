@@ -520,3 +520,7 @@
   cursor: pointer;
 }
 .calendar-task-form .calendar-task-form-cancel:hover { background: var(--wg-surface-3); }
+
+.task-tag i { font-size: 0.65rem; }
+.tracker-picker-empty { font-size: 0.8rem; color: var(--wg-text-subtle); align-self: center; }
+.calendar-task-form-row select { min-width: 0; }

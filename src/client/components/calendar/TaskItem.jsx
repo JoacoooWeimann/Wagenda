@@ -28,8 +28,11 @@ export default function TaskItem({ task, onToggle, onEdit, onRemove }) {
         title={readOnly ? undefined : 'Editar'}>
         <div className="task-title-row">
           <span className="task-title">{task.title}</span>
-          {task.category && (
-            <span className={`task-tag task-tag-${categoryColor(task.category)}`}>{task.category}</span>
+          {/* Etiqueta: el seguimiento al que suma; en tareas de un objetivo sin seguimiento, su tipo */}
+          {(task.tracker?.name ?? task.category) && (
+            <span className={`task-tag task-tag-${categoryColor(task.tracker?.name ?? task.category)}`}>
+              {task.tracker && <i className="bi bi-graph-up-arrow" aria-hidden="true" />} {task.tracker?.name ?? task.category}
+            </span>
           )}
         </div>
 

@@ -40,3 +40,15 @@
 .tracker-note { color: var(--wg-text-muted); font-size: 0.85rem; }
 
 .tracker-new-title { font-size: 1rem; margin: 0 0 8px; }
+
+/* Tipo de seguimiento en el formulario */
+.tracker-kind label { align-items: flex-start; }
+.tracker-kind label span { color: var(--wg-text-muted); }
+.tracker-kind label strong { color: var(--wg-text); }
+
+/* Barras de actividad por semana */
+.tracker-bars { flex: 1 1 200px; max-width: 320px; height: 56px; }
+.tracker-bars rect { fill: var(--wg-primary); opacity: 0.55; }
+.tracker-bars rect.is-current { fill: var(--wg-accent); opacity: 1; }
+.tracker-bars rect.is-empty { fill: var(--wg-border-strong); opacity: 1; }
+.tracker-bars text { fill: var(--wg-text-subtle); font-size: 9px; }

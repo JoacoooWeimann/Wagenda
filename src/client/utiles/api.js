@@ -61,6 +61,7 @@ export const updateBoard = (id, changes) => request('PATCH', `/api/boards/${id}`
 export const deleteBoard = (id) => request('DELETE', `/api/boards/${id}`);
 
 export const getTrackers = () => request('GET', '/api/trackers');
+export const getTrackerOptions = () => request('GET', '/api/trackers/options');
 export const getTracker = (id) => request('GET', `/api/trackers/${id}`);
 export const createTracker = (tracker) => request('POST', '/api/trackers', tracker);
 export const updateTracker = (id, changes) => request('PATCH', `/api/trackers/${id}`, changes);

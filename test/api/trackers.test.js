@@ -85,7 +85,7 @@ describe('objetivos vinculados a un seguimiento', () => {
   it('la sesión con valor crea también el registro, en la misma fecha', async () => {
     const tracker = await createTracker();
     const goal = (await ctx.request('POST', '/api/goals', running({ trackerId: tracker.id }))).body;
-    assert.deepEqual(goal.tracker, { id: tracker.id, name: 'Press banca', unit: 'kg' });
+    assert.deepEqual(goal.tracker, { id: tracker.id, name: 'Press banca', unit: 'kg', kind: 'medicion' });
 
     const res = await ctx.request('POST', `/api/goals/${goal.id}/sessions`, { date: '2026-10-06', value: 82.5, note: 'fácil' });
     assert.equal(res.status, 201);

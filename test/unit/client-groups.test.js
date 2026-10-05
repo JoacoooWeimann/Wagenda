@@ -29,9 +29,18 @@ describe('ranking (cliente)', () => {
   });
 
   it('rankingValue', () => {
-    assert.equal(rankingValue(rows[0].summary, 'best'), 85);
-    assert.equal(rankingValue(rows[1].summary, 'change'), 20);
-    assert.equal(rankingValue(rows[2].summary, 'last'), null);
+    assert.equal(rankingValue(rows[0], 'best'), 85);
+    assert.equal(rankingValue(rows[1], 'change'), 20);
+    assert.equal(rankingValue(rows[2], 'last'), null);
+  });
+
+  it('por actividad: más tareas hechas primero; los seguimientos de actividad siempre usan ese modo', async () => {
+    const { modeFor } = await import('../../src/client/utiles/groups.js');
+    const withActivity = rows.map((r, i) => ({ ...r, activity: [3, 0, 5, 1][i] }));
+    assert.deepEqual(sortRanking(withActivity, 'activity', true).map(r => r.user.username), ['tomi', 'joaco', 'ana', 'lucia']);
+    assert.equal(rankingValue(withActivity[1], 'activity'), 0);
+    assert.equal(modeFor({ kind: 'actividad' }, 'best'), 'activity');
+    assert.equal(modeFor({ kind: 'medicion' }, 'best'), 'best');
   });
 });
 

@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { addEntry, deleteEntry, updateTracker } from '../../utiles/api.js';
 import { dayMonth } from '../../utiles/goals.js';
-import { formatValue, changeInfo } from '../../utiles/trackers.js';
+import { formatValue, changeInfo, weeklyActivity } from '../../utiles/trackers.js';
 import { FieldError } from '../common.jsx';
 import Sparkline from './Sparkline.jsx';
+import ActivityBars from './ActivityBars.jsx';
 import TrackerForm from './TrackerForm.jsx';
 
 // Un seguimiento: resumen (último, mejor marca, variación), evolución, carga
@@ -20,6 +21,9 @@ export default function TrackerCard({ tracker, boards, today, onChange, onReload
   const { summary, unit, higherIsBetter } = tracker;
   // Copia de un tablero compartido: la estructura la define el dueño
   const isCopy = tracker.sourceTrackerId !== null;
+  const isMeasure = tracker.kind === 'medicion';
+  const activity = weeklyActivity(tracker.activity ?? [], today);
+  const tasksNoun = (n) => (n === 1 ? 'tarea' : 'tareas');
   const change = changeInfo(summary, higherIsBetter, unit);
   const fmt = (v) => formatValue(v, unit);
 
@@ -61,11 +65,33 @@ export default function TrackerCard({ tracker, boards, today, onChange, onReload
     <article className="goal-card">
       <div className="goal-card-header">
         <h3>{tracker.name}</h3>
+        <span className="goal-type">{isMeasure ? `Medición${unit ? ` · ${unit}` : ''}` : 'Actividad'}</span>
       </div>
+
+      {/* Actividad: tareas hechas vinculadas. En un seguimiento de actividad es lo
+          principal; en uno de medición se muestra si tiene tareas. */}
+      {!editing && (!isMeasure || activity.total > 0) && (
+        <div className="tracker-summary">
+          <div>
+            <span className="tracker-stat-label">Esta semana</span>
+            <strong>{activity.thisWeek}</strong>
+            <span className="tracker-stat-date">{tasksNoun(activity.thisWeek)} hechas</span>
+          </div>
+          <div>
+            <span className="tracker-stat-label">Total</span>
+            <strong>{activity.total}</strong>
+            <span className="tracker-stat-date">{tasksNoun(activity.total)} hechas</span>
+          </div>
+          <ActivityBars weeks={activity.weeks} label={`Tareas hechas por semana en ${tracker.name}`} />
+        </div>
+      )}
+      {!editing && !isMeasure && activity.total === 0 && (
+        <p className="goal-meta">Elegí «{tracker.name}» como seguimiento en tus tareas: cada una que hagas suma acá.</p>
+      )}
 
       {editing ? (
         <TrackerForm tracker={tracker} boards={boards} onSave={saveEdit} onCancel={() => setEditing(false)} />
-      ) : summary.count === 0 ? (
+      ) : !isMeasure ? null : summary.count === 0 ? (
         <p className="goal-meta">Todavía no hay registros. Cargá el primero.</p>
       ) : (
         <div className="tracker-summary">
@@ -88,18 +114,20 @@ export default function TrackerCard({ tracker, boards, today, onChange, onReload
         </div>
       )}
 
-      <form className="goal-session-form tracker-entry-form" onSubmit={handleAdd} noValidate>
-        <input type="date" value={entry.date} max={today} aria-label="Fecha del registro"
-          className={entryErrors.date ? 'is-invalid' : ''}
-          onChange={(e) => setEntry(en => ({ ...en, date: e.target.value }))} />
-        <input type="number" step="any" placeholder={unit ? `Valor (${unit})` : 'Valor'} aria-label="Valor"
-          className={entryErrors.value ? 'is-invalid' : ''} value={entry.value}
-          onChange={(e) => setEntry(en => ({ ...en, value: e.target.value }))} />
-        <input type="text" maxLength={200} placeholder="Nota (opcional)" aria-label="Nota" value={entry.note}
-          onChange={(e) => setEntry(en => ({ ...en, note: e.target.value }))} />
-        <button type="submit" className="goal-btn-primary" disabled={busy}>{busy ? 'Guardando…' : '+ Registrar'}</button>
-        <FieldError message={entryErrors.value || entryErrors.date || entryErrors.note} />
-      </form>
+      {isMeasure && (
+        <form className="goal-session-form tracker-entry-form" onSubmit={handleAdd} noValidate>
+          <input type="date" value={entry.date} max={today} aria-label="Fecha del registro"
+            className={entryErrors.date ? 'is-invalid' : ''}
+            onChange={(e) => setEntry(en => ({ ...en, date: e.target.value }))} />
+          <input type="number" step="any" placeholder={unit ? `Valor (${unit})` : 'Valor'} aria-label="Valor"
+            className={entryErrors.value ? 'is-invalid' : ''} value={entry.value}
+            onChange={(e) => setEntry(en => ({ ...en, value: e.target.value }))} />
+          <input type="text" maxLength={200} placeholder="Nota (opcional)" aria-label="Nota" value={entry.note}
+            onChange={(e) => setEntry(en => ({ ...en, note: e.target.value }))} />
+          <button type="submit" className="goal-btn-primary" disabled={busy}>{busy ? 'Guardando…' : '+ Registrar'}</button>
+          <FieldError message={entryErrors.value || entryErrors.date || entryErrors.note} />
+        </form>
+      )}
 
       <div className="goal-actions">
         {summary.count > 0 && (
